@@ -24,3 +24,4 @@ header('Content-Disposition: '.(isset($_GET['dl'])?'attachment':'inline').'; fil
 header('Content-Length: '.filesize($f));
 header('X-Robots-Tag: noindex');
 readfile($f);
+Cron::kick();

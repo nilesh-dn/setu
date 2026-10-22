@@ -3,6 +3,7 @@ $do=$_GET['do']??'';
 session_write_close();
 if($do==='tick'){
   $n=0;
+  Cron::kick();
   if(is_post()&&Queue::due())$n=Queue::work();
   $s=DB::row("SELECT SUM(status='pending' AND run_after<=NOW()) due,SUM(status='pending' AND run_after>NOW()) later,SUM(status='running') running FROM jobs WHERE status IN ('pending','running')");
   $next=DB::val("SELECT MIN(run_after) FROM jobs WHERE status='pending' AND run_after>NOW()");

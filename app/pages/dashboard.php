@@ -6,7 +6,7 @@ $camps=DB::all('SELECT c.*,(SELECT COUNT(*) FROM leads WHERE campaign_id=c.id AN
 $ev=DB::all('SELECT e.*,l.name FROM events e JOIN leads l ON l.id=e.lead_id ORDER BY e.id DESC LIMIT 14');
 $ai=setting('ai_key_'.setting('ai_provider','anthropic'))!=='';
 $maps=setting('maps_source')==='serpapi'?setting('serpapi_key')!=='':setting('google_api_key')!=='';
-$checks=[[$ai,'Connect an AI provider','ai'],[$maps,'Add Google Maps data source key','settings&tab=data'],[Mailer::ready(),'Configure SMTP email','settings&tab=email'],[setting('wa_provider')!=='manual','Connect WhatsApp API (optional – manual mode works)','settings&tab=whatsapp'],[setting('company_logo')!=='','Company info & branding','settings'],[(int)setting('cron_last','0')>time()-86400,'Set up the cron job (see Updates → Go live)','updates']];
+$checks=[[$ai,'Connect an AI provider','ai'],[$maps,'Add Google Maps data source key','settings&tab=data'],[Mailer::ready(),'Configure SMTP email','settings&tab=email'],[setting('wa_provider')!=='manual','Connect WhatsApp API (optional – manual mode works)','settings&tab=whatsapp'],[setting('company_logo')!=='','Company info & branding','settings'],[Cron::mode()!=='off','Background scheduler running (automatic)','updates#cron']];
 $done=count(array_filter(array_column($checks,0)));
 $rate=$k['ct']?round($k['rp']/$k['ct']*100,1):0;
 $fun=[['Found',$k['t']],['Audited',$k['au']],['Report ready',$k['rr']],['Contacted',$k['ct']],['Opened / viewed',$k['op']],['Replied',$k['rp']],['Won',$k['wn']]];$max=max(1,$k['t']);

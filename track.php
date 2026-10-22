@@ -9,3 +9,4 @@ if($t&&($m=DB::row("SELECT id,lead_id,status FROM messages WHERE token=? AND cha
   event($m['lead_id'],'opened','Email opened','email');}
 header('Content-Type: image/gif');header('Cache-Control: no-store');
 echo base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+Cron::kick();
