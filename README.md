@@ -21,13 +21,12 @@ Built for **shared hosting** (cPanel / Hostinger / any PHP host): plain PHP 8 + 
 1. Upload the files to `public_html` or a sub-domain folder (Download ZIP from GitHub → File Manager → Extract), or use cPanel → Git Version Control.
 2. Create a MySQL database and user (cPanel → MySQL Database Wizard, ALL PRIVILEGES).
 3. Open `https://your-domain/install.php`, enter the DB details and create the admin login.
-4. Add a cron job running every minute: `/usr/local/bin/php /home/USER/public_html/cron.php >/dev/null 2>&1`
-   (or a URL cron: `https://your-domain/cron.php?key=YOUR_CRON_KEY` – the key is shown in the Updates tab).
+4. Background jobs run automatically – no cron setup needed. Anvesha adds a server cron itself when the host allows it, otherwise its built-in scheduler keeps running and restarts on any visit. (Optional extra reliability: a cron job every minute with `php /path/to/cron.php`.)
 5. Connect AI (AI Connection tab), the Google Places / SerpAPI key, SMTP/IMAP and WhatsApp (Settings).
 
 Requirements: PHP 8.0+ with pdo_mysql, curl, mbstring, dom, gd, openssl, and zip (for updates). Also MySQL 5.7+ or MariaDB 10.3+, and HTTPS.
 
-Background work also runs while the app is open in your browser, so it works before the cron job is set up. Each step is a separate short job, so strict `max_execution_time` limits are fine.
+Each step is a separate short job, so strict `max_execution_time` limits are fine.
 
 ## Releasing an update
 1. Commit your changes to the update branch (default `main`, configurable in Updates).

@@ -3,7 +3,7 @@ define('ROOT',__DIR__);define('APP',ROOT.'/app');define('STORAGE',ROOT.'/storage
 define('APP_VERSION',trim((string)@file_get_contents(ROOT.'/VERSION'))?:'1.0.0');
 if(is_file(ROOT.'/config.php')){header('Location: index.php');exit;}
 require APP.'/helpers.php';
-foreach(['DB','Settings','Seed','Migrator'] as $c)require APP.'/lib/'.$c.'.php';
+foreach(['DB','Settings','Seed','Migrator','Cron'] as $c)require APP.'/lib/'.$c.'.php';
 $req=['PHP 8.0+'=>version_compare(PHP_VERSION,'8.0','>='),'pdo_mysql'=>extension_loaded('pdo_mysql'),'curl'=>extension_loaded('curl'),'mbstring'=>extension_loaded('mbstring'),'dom'=>extension_loaded('dom'),'gd'=>extension_loaded('gd'),'openssl'=>extension_loaded('openssl'),'zip (for updates)'=>class_exists('ZipArchive'),'storage/ writable'=>is_writable(STORAGE),'root folder writable (config.php)'=>is_writable(ROOT)];
 $err='';$P=$_POST;
 if(($_SERVER['REQUEST_METHOD']??'')==='POST'){
@@ -21,6 +21,7 @@ if(($_SERVER['REQUEST_METHOD']??'')==='POST'){
     @mkdir(ROOT.'/assets/uploads',0755,true);
     if(file_put_contents(ROOT.'/config.php',"<?php\n// Anvesha configuration – keep this file private.\nreturn ".var_export($cfg,true).";\n")===false)throw new Exception('Could not write config.php – make the folder writable.');
     @chmod(ROOT.'/config.php',0640);
+    Settings::set('cron_tried',1);if(Cron::install())Settings::set('cron_cli_last',time());
     header('Location: index.php?r=login&installed=1');exit;}
   catch(Throwable $e){$err=$e->getMessage();}}
 $guess=(!empty($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off'?'https':'http').'://'.($_SERVER['HTTP_HOST']??'localhost').rtrim(str_replace('\\','/',dirname($_SERVER['SCRIPT_NAME']??'/')),'/');

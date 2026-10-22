@@ -32,3 +32,4 @@ foreach($d['entry']??[] as $en)foreach($en['changes']??[] as $ch){
       DB::insert('messages',['lead_id'=>$l['id'],'channel'=>'whatsapp','direction'=>'in','status'=>'received','ext_id'=>mb_substr($msg['id']??'',0,190),'body'=>$text]);
       Outreach::markReplied($l['id'],'whatsapp',$text);}}}
 echo 'OK';
+Cron::kick();
