@@ -10,7 +10,7 @@ final class Maps{
     if($next)$body['pageToken']=$next;
     $mask='places.id,places.displayName,places.formattedAddress,places.addressComponents,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryTypeDisplayName,places.types,places.regularOpeningHours.weekdayDescriptions,places.businessStatus,places.location,places.photos.name,places.editorialSummary,nextPageToken';
     $r=http_json('https://places.googleapis.com/v1/places:searchText',['json'=>$body,'headers'=>['X-Goog-Api-Key: '.$key,'X-Goog-FieldMask: '.$mask],'timeout'=>40]);
-    if($r['code']!==200)throw new Exception('Google Places error '.$r['code'].': '.($r['data']['error']['message']??$r['error']?:substr($r['body'],0,300)));
+    if($r['code']!==200)throw new Exception('Google Places error '.$r['code'].': '.($r['data']['error']['message']??$r['error']?:substr($r['body'],0,300)).($r['code']===403?' – Check in Google Cloud: (1) "Places API (New)" is enabled, (2) the key\'s API restrictions include "Places API (New)", (3) application restriction is "None" or your server IP (not websites/referrers), (4) billing is enabled.':''));
     $out=[];
     foreach($r['data']['places']??[] as $p){
       $city='';
