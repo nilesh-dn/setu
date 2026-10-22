@@ -8,7 +8,8 @@ final class Updater{
     $c=jd(setting('update_cache'));
     if(!$force&&$c&&time()-($c['at']??0)<6*3600)return $c;
     $repo=self::repo();$br=self::branch();
-    $v=http_json('https://api.github.com/repos/'.$repo.'/contents/version.json?ref='.rawurlencode($br),['headers'=>array_merge(self::h(),['Accept: application/vnd.github.raw+json']),'timeout'=>20]);
+    $v=http_json('https://api.github.com/repos/'.$repo.'/contents/version.json?ref='.rawurlencode($br),['headers'=>self::h(),'timeout'=>20]);
+    if(isset($v['data']['content']))$v['data']=json_decode(base64_decode($v['data']['content']),true);
     $cm=http_json('https://api.github.com/repos/'.$repo.'/commits?per_page=15&sha='.rawurlencode($br),['headers'=>self::h(),'timeout'=>20]);
     $out=['at'=>time(),'ok'=>$v['code']===200,'error'=>$v['code']===200?'':'GitHub returned HTTP '.$v['code'].($v['code']===404?' (repository/branch not found or private – add a GitHub token)':''),'latest'=>$v['data']['version']??null,'notes'=>$v['data']['notes']??[],'date'=>$v['data']['date']??'','commits'=>[]];
     if($cm['code']===200&&is_array($cm['data']))foreach($cm['data'] as $x)$out['commits'][]=['sha'=>substr($x['sha'],0,7),'msg'=>strtok($x['commit']['message'],"\n"),'date'=>$x['commit']['author']['date'],'author'=>$x['commit']['author']['name'],'url'=>$x['html_url']];
