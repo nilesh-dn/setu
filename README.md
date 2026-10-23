@@ -1,28 +1,50 @@
-# Anvesha – AI Lead Intelligence for local businesses
+# Setu – Leads, Audits & CRM for agencies
 
-Anvesha finds businesses on **Google Maps**, audits their **website** and **Google Business Profile**, writes a persuasive **AI audit report** as a branded PDF, and sends it to the owner by **Email and WhatsApp**. It tracks every lead's journey: found → audited → report → contacted → opened → replied → won.
+Setu ("bridge") finds businesses on **Google Maps**, audits their **website** and **Google Business Profile**, writes a premium **AI audit report** as a beautifully designed PDF, sends it on **Email and WhatsApp** (PDF attached), and then runs your sales follow-up as a **CRM** with lead capture, **automations**, **AI voice calls** and **appointment booking**.
 
-Built for **shared hosting** (cPanel / Hostinger / any PHP host): plain PHP 8 + MySQL, no framework, no Node, no Composer needed on the server. The PDF (dompdf) and email (PHPMailer) libraries are bundled in `app/vendor`.
+Built for **shared hosting** (cPanel / Hostinger / any PHP host): plain PHP 8 + MySQL, no framework, no Node, no Composer needed on the server. PDF (dompdf) and email (PHPMailer) libraries are bundled in `app/vendor`.
 
 ## Features
-- **Search** – keyword + location, top 10/20/30/40/50/100 or any number. Uses Google Places API (New, up to 60 results) or SerpAPI (100+). Saves name, category, address, phone, website, rating, reviews and Maps link.
-- **Contact enrichment** – if Maps has no phone number, it is taken from the website (tel:, WhatsApp links, text). Emails are always looked for on the website and contact page.
-- **Initiate Process** – for each selected lead: a website audit (~25 SEO, speed, mobile, schema, tracking and conversion checks, with optional PageSpeed) plus a Google Maps audit (rating, reviews vs competitors, rank, photos, hours, website, phone), then the AI report and the PDF.
-- **AI reports** – the report focuses on weak points and pitches your services. It includes ROI maths: "just *n* customers a year pays for our fee", with the lead value estimated from the industry and city. Your logo, company info, colours and fonts (you can upload TTF fonts) appear on the cover and every page.
-- **No website?** – the report pitches a website, and your **website proposal PDF** (uploaded in Settings) is attached with the Maps audit.
-- **Prompts & Messages** – a default prompt or message for each type, with as many saved versions as you like and one marked *In use*. Types: report with website, report without website, WhatsApp, WhatsApp without website, Email, Email without website. The default messages contain **no fees**, and the first message carries the PDF.
-- **Outreach** – SMTP email with the PDF attached and open tracking. WhatsApp runs in one of three modes: Manual (wa.me, free), the official WhatsApp Cloud API (template with a document header), or any other provider's HTTP API. There is a sending gap, a daily limit, and a "skip already contacted" option.
-- **Reply tracking** – IMAP inbox scan (no php-imap extension needed). WhatsApp Cloud webhook for delivered, read and replies. Manual "mark replied". PDF view tracking.
-- **AI Connection** – Anthropic Claude, OpenAI ChatGPT, OpenRouter, Google Gemini, Groq, DeepSeek or any OpenAI-compatible API. Each has step-by-step instructions and a test button.
-- **Updates tab** – the "Go live" guide, checks GitHub automatically every 6 hours, and offers one-click **Update now**. It backs up changed files, never touches `config.php` / `storage/` / data, and then migrates the database.
-- Configurable **currency** (default INR ₹), timezone, team users, and CSV export.
+**Prospecting**
+- **Map Scraper** – keyword + location, top 10/20/30/40/50/100 or any number (Google Places API up to 60, SerpAPI 100+). Missing phone numbers and emails are found on each website.
+- **Scraped Data** – all scraped businesses, kept separate from your CRM. Bulk *Initiate Process*, *Send outreach*, *Move to Leads*, *Abort*.
+- **Deep audit** – ~45 website checks in 8 areas (technical, performance, on-page SEO, content, conversion, local SEO, trust, social: SSL expiry, redirects, broken links, inner-page crawl, image weight, render-blocking files, schema, NAP consistency, domain age, optional PageSpeed/Core Web Vitals) plus a Google Maps audit benchmarked against competitors.
+- **Premium AI reports** – 15+ page branded PDF: cover, health-score gauges, score-by-area bars, top priorities, competitor review/rating charts, AI-written deep-dive (optionally web-researched by Claude), revenue opportunity with ROI chart, 90-day plan, quick wins, about-us and CTA. Built-in illustrations in your brand colours, or **upload your own doodles/cartoons per section and per prompt**.
+- **Live progress & abort** – every audit/report shows its % and current step; stop one item or everything from the **Activity** panel. Stuck steps time out with a clear error.
+- **Outreach** – email with the PDF attached; WhatsApp Cloud API uploads the PDF as a real attachment (no link). Manual mode shares the PDF straight into WhatsApp on mobile.
+
+**CRM**
+- **Leads** – won or manually moved scraped businesses plus every captured enquiry. List and drag-and-drop **board**, statuses, owners, follow-ups, tags, deal value, **custom fields**, CSV import/export, filters by source (Map scraper, Website, Meta, Google Ads, Webhook, Manual, Import, Booking).
+- **Lead capture** (Settings → Lead capture) – website forms (ready-made form or attach to existing forms), **Meta / Facebook Lead Ads** webhook, **Google Ads lead form** webhook, generic webhook for Zapier / Make / n8n / Pabbly. Duplicates are merged.
+- **Automations** – trigger (new lead, status change, tag, reply, report ready, appointment, call finished, no reply after N days, follow-up due) → conditions → steps: WhatsApp, email, **AI voice call (Sarvam AI, Bland, Vapi, Retell or any API)**, booking link, wait, status, tag, assign, follow-up, team notification, webhook, run audit. Ready-made recipes included. Every step is saved in the lead's journey.
+- **Appointments** – public booking page (general and personal links), calendar, confirmations, 1-hour reminders.
+- **Journey** – a complete timeline per lead: found, audited, sent, opened, viewed, replied, calls, bookings, automation steps, notes.
+
+**Platform**
+- **Modules** – CRM is always on; **Prospecting** can be switched off by a super admin (its menu, pages and settings are hidden, data is kept). Settings are grouped by module: General, Messaging, Prospecting, CRM, System.
+- **Roles** – *Super admin* (everything incl. modules and other super admins), *Admin / Manager* (all leads, prospecting, automations, templates, settings, team), *Sales person* (own + unassigned leads, add leads, notes, status, appointments). Manage people in **Team & Roles**.
+- **API Usage & Costs** – counts every AI (tokens per model), Google Places, SerpAPI, PageSpeed, WhatsApp, AI voice (Sarvam, Bland, Vapi, Retell), email and Google Calendar call. Shows free limits, month-end projection, estimated cost (USD and your currency) and warns before you go over a free tier. Prices are editable.
+- **Google Calendar (optional)** – bookings stay in Setu; when connected, busy times in Google block slots, each booking becomes a calendar event with a Meet link and invite, cancellations remove it.
+- **Email** – PHP mail by default (works on shared hosting); SMTP optional for better delivery.
+- AI Connection (Claude, ChatGPT, OpenRouter, Gemini, Groq, DeepSeek, custom), automatic background scheduler (no cron needed), one-click GitHub updates, configurable currency (default INR).
+
+## Audit report delivery
+Settings → Prospecting → **Report delivery**: send businesses an **online report link** (a branded web page with Download PDF, WhatsApp and Book-a-call buttons), a **PDF attachment**, or **both**. PDFs are made by the free built-in engine – no external service needed. Before writing, the AI runs a research step (live web search with Claude) and the report lists its sources.
+
+## Lead capture – which method?
+Use **one** method per form:
+- **Elementor / WordPress form plugins (recommended):** Form widget → *Actions After Submit* → **Webhook** → paste the source's Endpoint URL. Simple and "Advanced data" payloads both work.
+- **Any other form without a webhook option:** paste the source's script before `</body>`.
+- **No form yet:** paste the ready-made HTML form.
+Don't combine the webhook and the script for the same form – each enquiry would arrive twice (duplicates are merged by phone/email, but the activity doubles).
+Field mapping: common names (name, phone/mobile/whatsapp, email, company, city, service, budget, message) and your custom field keys are matched automatically; anything else goes to the enquiry notes. After the first submission every field appears under **Settings → CRM → Lead capture → Field mapping**, where you can send it to any field or ignore it.
 
 ## Install (shared hosting)
 1. Upload the files to `public_html` or a sub-domain folder (Download ZIP from GitHub → File Manager → Extract), or use cPanel → Git Version Control.
 2. Create a MySQL database and user (cPanel → MySQL Database Wizard, ALL PRIVILEGES).
 3. Open `https://your-domain/install.php`, enter the DB details and create the admin login.
-4. Background jobs run automatically – no cron setup needed. Anvesha adds a server cron itself when the host allows it, otherwise its built-in scheduler keeps running and restarts on any visit. (Optional extra reliability: a cron job every minute with `php /path/to/cron.php`.)
-5. Connect AI (AI Connection tab), the Google Places / SerpAPI key, SMTP/IMAP and WhatsApp (Settings).
+4. Background jobs run automatically – no cron setup needed. Setu adds a server cron itself when the host allows it, otherwise its built-in scheduler keeps running and restarts on any visit. (Optional extra reliability: a cron job every minute with `php /path/to/cron.php`.)
+5. Connect AI (AI Connection tab), the Google Places / SerpAPI key, email (PHP mail works out of the box; SMTP/IMAP optional) and WhatsApp (Settings). The installer's admin account is the **super admin**.
 
 Requirements: PHP 8.0+ with pdo_mysql, curl, mbstring, dom, gd, openssl, and zip (for updates). Also MySQL 5.7+ or MariaDB 10.3+, and HTTPS.
 
@@ -39,8 +61,13 @@ Installed sites show a **New** badge on Updates and can update with one click. F
 index.php        app entry (routes ?r=page)      install.php  installer
 cron.php         background queue + replies       report.php   public PDF link (tracked)
 track.php        email open pixel                 webhook.php  WhatsApp Cloud API webhook
-app/lib          DB, Settings, Maps, Scraper, Auditor, AI, Report, Mailer, WhatsApp, Queue, Outreach, Updater, Migrator, Seed
-app/pages        dashboard, campaigns, campaign, leads, lead, reports, prompts, settings, ai, updates, api, login
+hook.php         lead capture (forms/Meta/Google) callhook.php AI voice call results
+book.php         public booking page
+app/lib          DB, Settings, Maps, Scraper, Auditor, AI, Report, Charts, Illus, Mailer, WhatsApp, Queue, Outreach,
+                 CRM, Capture, Automation, Voice, Booking, GCal, Usage, Cron, Updater, Migrator, Seed
+app/pages        dashboard, scraper, campaign, prospects, leads, lead, lead_new, appointments, automations, automation,
+                 templates, reports, settings, ai, usage, team, user, account, updates, api, login
+gcal.php         Google Calendar connect (OAuth)
 app/views        layout + shared partials          app/migrations  database schema
 assets/          css, js, images, uploaded logo    storage/  reports, uploads, fonts, logs, backups (private)
 ```

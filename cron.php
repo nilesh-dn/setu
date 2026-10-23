@@ -21,6 +21,7 @@ while(time()-$t0<$span){
   $n+=$done;
   if(!$done){if(!$chain&&!$cli)break;sleep(5);}
   Settings::set('cron_last',time());}
+try{Automation::scan();Booking::remind();}catch(Throwable $e){logmsg('Scheduler: '.$e->getMessage());}
 $rep=0;
 if(setting('imap_host')&&time()-(int)setting('imap_last','0')>600){
   Settings::set('imap_last',time());

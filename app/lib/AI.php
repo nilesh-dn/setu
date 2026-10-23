@@ -9,40 +9,56 @@ final class AI{
     'deepseek'=>['name'=>'DeepSeek','url'=>'https://platform.deepseek.com/api_keys','models'=>'deepseek-chat','steps'=>['Go to platform.deepseek.com and sign in.','Top up balance, then create an API key.','Paste it below.'],'note'=>'Low-cost option.'],
     'custom'=>['name'=>'Custom (OpenAI-compatible)','url'=>'','models'=>'any','steps'=>['Use any provider with an OpenAI-compatible /chat/completions endpoint (Together, Mistral, Azure OpenAI proxy, self-hosted…).','Enter the full base URL, e.g. https://api.together.xyz/v1','Enter the key and model name.'],'note'=>'For advanced users.']];}
   static function model($p=null){$p=$p?:setting('ai_provider','anthropic');return setting('ai_model_'.$p);}
-  static function complete($system,$user,$max=12000,$p=null){
+  static function complete($system,$user,$max=12000,$p=null,$o=[]){
     $p=$p?:setting('ai_provider','anthropic');
     $key=setting('ai_key_'.$p);$model=self::model($p);
     if(!$key)throw new Exception('No API key for '.(self::providers()[$p]['name']??$p).'. Add it in the AI Connection tab.');
     if(!$model)throw new Exception('No AI model selected in the AI Connection tab.');
     @set_time_limit(300);
-    if($p==='anthropic')return self::anthropic($key,$model,$system,$user,$max);
-    if($p==='gemini')return self::gemini($key,$model,$system,$user,$max);
+    $op=$o['op']??'chat';
+    if($p==='anthropic')return self::anthropic($key,$model,$system,$user,$max,$o);
+    if($p==='gemini')return self::gemini($key,$model,$system,$user,$max,$op);
     $base=['openai'=>'https://api.openai.com/v1','openrouter'=>'https://openrouter.ai/api/v1','groq'=>'https://api.groq.com/openai/v1','deepseek'=>'https://api.deepseek.com/v1','custom'=>rtrim(setting('ai_custom_url'),'/')][$p]??'';
     if(!$base)throw new Exception('Unknown AI provider.');
     $body=['model'=>$model,'messages'=>[['role'=>'system','content'=>$system],['role'=>'user','content'=>$user]]];
     $body[$p==='openai'?'max_completion_tokens':'max_tokens']=$max;
     $h=['Authorization: Bearer '.$key];
-    if($p==='openrouter'){$h[]='HTTP-Referer: '.base_url();$h[]='X-Title: Anvesha';}
+    if($p==='openrouter'){$h[]='HTTP-Referer: '.base_url();$h[]='X-Title: Setu';}
     $r=http_json($base.'/chat/completions',['json'=>$body,'headers'=>$h,'timeout'=>240]);
+    Usage::log($p,$op,1,$r['data']['usage']['prompt_tokens']??0,$r['data']['usage']['completion_tokens']??0,$model,$r['code']!==200);
     if($r['code']!==200)throw new Exception('AI error '.$r['code'].': '.($r['data']['error']['message']??$r['error']?:substr($r['body'],0,300)));
     $t=$r['data']['choices'][0]['message']['content']??'';
     if($t==='')throw new Exception('AI returned an empty response.');
     return $t;}
-  private static function anthropic($key,$model,$system,$user,$max){
-    $body=['model'=>$model,'max_tokens'=>$max,'system'=>$system,'messages'=>[['role'=>'user','content'=>$user]]];
+  private static function anthropic($key,$model,$system,$user,$max,$o=[]){
+    $msgs=[['role'=>'user','content'=>$user]];
+    $body=['model'=>$model,'max_tokens'=>$max,'system'=>$system];
     $h=['x-api-key: '.$key,'anthropic-version: 2026-10-21'];
     if(preg_match('/^claude-(opus|sonnet|haiku|fable)-5/',$model))$body['output_config']=['effort'=>'medium'];
+    // Optional live web research (industry benchmarks, search demand) with Anthropic's server-side web search
+    if(!empty($o['research']))$body['tools']=[['type'=>preg_match('/^claude-(opus|sonnet|fable)-|^claude-sonnet-4-6|^claude-opus-4-[678]/',$model)?'web_search_20260209':'web_search_20250305','name'=>'web_search','max_uses'=>(int)($o['searches']??4)]];
     // Server-side refusal fallback where supported
     $fb=preg_match('/^claude-(opus-5|opus-5-5|sonnet-5-5|fable-5-1)$/',$model);
-    $r=http_json('https://api.anthropic.com/v1/messages',['json'=>$fb?$body+['fallbacks'=>'default']:$body,'headers'=>$fb?array_merge($h,['anthropic-beta: server-side-fallback-2026-07-01']):$h,'timeout'=>280]);
-    if($fb&&$r['code']===400)$r=http_json('https://api.anthropic.com/v1/messages',['json'=>$body,'headers'=>$h,'timeout'=>280]);
-    if($r['code']!==200)throw new Exception('Claude API error '.$r['code'].': '.($r['data']['error']['message']??$r['error']?:substr($r['body'],0,300)));
-    if(($r['data']['stop_reason']??'')==='refusal')throw new Exception('Claude declined this request ('.($r['data']['stop_details']['category']??'policy').'). Try again or edit the prompt.');
-    $t='';foreach($r['data']['content']??[] as $b)if(($b['type']??'')==='text')$t.=$b['text'];
-    if($t==='')throw new Exception('Claude returned an empty response.');
+    $t='';$tin=0;$tout=0;$ws=0;
+    try{
+    for($turn=0;$turn<4;$turn++){
+      $req=$body+['messages'=>$msgs];
+      $r=http_json('https://api.anthropic.com/v1/messages',['json'=>$fb?$req+['fallbacks'=>'default']:$req,'headers'=>$fb?array_merge($h,['anthropic-beta: server-side-fallback-2026-07-01']):$h,'timeout'=>280]);
+      if($r['code']===400&&$fb)$r=http_json('https://api.anthropic.com/v1/messages',['json'=>$req,'headers'=>$h,'timeout'=>280]);
+      if($r['code']===400&&isset($body['tools'])){unset($body['tools']);$r=http_json('https://api.anthropic.com/v1/messages',['json'=>$body+['messages'=>$msgs],'headers'=>$h,'timeout'=>280]);}
+      $u=$r['data']['usage']??[];$tin+=($u['input_tokens']??0)+($u['cache_creation_input_tokens']??0)+($u['cache_read_input_tokens']??0);$tout+=$u['output_tokens']??0;$ws+=$u['server_tool_use']['web_search_requests']??0;
+      if($r['code']!==200)throw new Exception('Claude API error '.$r['code'].': '.($r['data']['error']['message']??$r['error']?:substr($r['body'],0,300)));
+      $stop=$r['data']['stop_reason']??'';
+      if($stop==='refusal')throw new Exception('Claude declined this request ('.($r['data']['stop_details']['category']??'policy').'). Try again or edit the prompt.');
+      foreach($r['data']['content']??[] as $b)if(($b['type']??'')==='text')$t.=$b['text'];
+      if($stop!=='pause_turn')break;
+      $msgs[]=['role'=>'assistant','content'=>$r['data']['content']];}}
+    finally{Usage::log('anthropic',$o['op']??'chat',1,$tin,$tout,$model,trim($t)==='');if($ws)Usage::log('web_search',$o['op']??'chat',$ws);}
+    if(trim($t)==='')throw new Exception('Claude returned an empty response.');
     return $t;}
-  private static function gemini($key,$model,$system,$user,$max){
+  private static function gemini($key,$model,$system,$user,$max,$op='chat'){
     $r=http_json('https://generativelanguage.googleapis.com/v1beta/models/'.rawurlencode($model).':generateContent',['headers'=>['x-goog-api-key: '.$key],'json'=>['systemInstruction'=>['parts'=>[['text'=>$system]]],'contents'=>[['role'=>'user','parts'=>[['text'=>$user]]]],'generationConfig'=>['maxOutputTokens'=>$max]],'timeout'=>240]);
+    Usage::log('gemini',$op,1,$r['data']['usageMetadata']['promptTokenCount']??0,($r['data']['usageMetadata']['candidatesTokenCount']??0)+($r['data']['usageMetadata']['thoughtsTokenCount']??0),$model,$r['code']!==200);
     if($r['code']!==200)throw new Exception('Gemini error '.$r['code'].': '.($r['data']['error']['message']??$r['error']?:substr($r['body'],0,300)));
     $t='';foreach($r['data']['candidates'][0]['content']['parts']??[] as $pt)$t.=$pt['text']??'';
     if($t==='')throw new Exception('Gemini returned an empty response.');
