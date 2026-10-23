@@ -34,6 +34,8 @@ function lead_ok($l){return $l&&(role()!=='sales'||($l['is_lead']&&(!$l['assigne
 function rbadge($r){$a=roles()[$r]??[ucfirst((string)$r),'gray'];return '<span class="bdg bdg-'.$a[1].'">'.e($a[0]).'</span>';}
 // Stat card used across pages
 function kpi($label,$value,$ic,$c,$foot='',$href=''){return '<'.($href?'a href="'.e($href).'"':'div').' class="stat st-'.$c.'"><span class="st-i">'.icon($ic).'</span><span class="st-l">'.e($label).'</span><b class="st-v">'.$value.'</b>'.($foot!==''?'<small class="st-f">'.$foot.'</small>':'').'</'.($href?'a':'div').'>';}
+// How audit reports reach the business: link (web page), pdf (attachment) or both
+function report_mode(){$m=setting('report_delivery','both');return in_array($m,['link','pdf','both'],true)?$m:'both';}
 function denied($msg='You do not have access to that page.'){flash($msg,'err');redirect(url('dashboard'));}
 function money($n,$dec=0){return setting('currency_symbol','₹').number_format((float)$n,$dec);}
 function ago($ts){
@@ -105,12 +107,10 @@ function settings_map(){
   $s=fn($t)=>url('settings',['tab'=>$t]);
   $m=['general'=>['General','Company, brand & AI','grid','indigo',[['company','Company','grid',$s('company')],['branding','Brand & PDF design','image',$s('branding')],['ai','AI connection','spark',url('ai')]]],
   'channels'=>['Messaging','Email, WhatsApp, calls','msg','green',[['email','Email','mail',$s('email')],['whatsapp','WhatsApp','wa',$s('whatsapp')],['voice','AI voice calls','mic',$s('voice')]]],
-  'prospecting'=>['Prospecting','Maps, audits, outreach','map','orange',[['data','Map scraper & audits','map',$s('data')],['pricing','Pricing & proposal','tag',$s('pricing')],['pdf','Report PDF engine','file',$s('pdf')],['outreach','Outreach sending','send',$s('outreach')],['templates','Templates & report design','layers',url('templates')]]],
+  'prospecting'=>['Prospecting','Maps, audits, outreach','map','orange',[['data','Map scraper & audits','map',$s('data')],['pricing','Pricing & proposal','tag',$s('pricing')],['pdf','Report delivery','file',$s('pdf')],['outreach','Outreach sending','send',$s('outreach')],['templates','Templates & report design','layers',url('templates')]]],
   'crm'=>['CRM','Capture, fields, calendar','users','teal',[['capture','Lead capture','plug',$s('capture')],['fields','Custom fields','list',$s('fields')],['appointments','Appointments & calendar','cal',$s('appointments')]]],
-  'system'=>['System','Team, usage, scheduler','sliders','violet',[['team','Team & roles','shield',url('team')],['usage','API usage & costs','activity',url('usage')],['scheduler','Background scheduler','zap',$s('scheduler')]]],
-  'modules'=>['Modules','Switch features on/off','layers','pink',[['modules','Modules','layers',$s('modules')]]],
-  'updates'=>['Updates','Version & go-live guide','refresh','sky',[['updates','Updates','refresh',url('updates')]]]];
-  if(!is_super())unset($m['modules']);
+  'system'=>['System','Scheduler & API usage','sliders','violet',[['scheduler','Background scheduler','zap',$s('scheduler')],['usage','API usage & costs','activity',url('usage')]]]];
+
   return $m;}
 // Opens the settings shell (top tabs + left menu). Close with settings_end().
 function settings_start($key){

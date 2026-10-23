@@ -20,7 +20,14 @@ final class Mailer{
     $m->addAddress($to);
     $m->Subject=$subject;$m->isHTML(true);$m->Body=$html;$m->AltBody=$text;
     foreach($files as $name=>$path)if(is_file($path))$m->addAttachment($path,$name);
-    $m->send();
+    try{$m->send();}
+    catch(Throwable $e){
+      if(self::smtp())throw $e;
+      // PHP mail() often refuses a "-f" sender the host does not own, or is routed through sendmail – retry both ways
+      $ok=false;
+      try{$m->Sender='';$m->isMail();$m->send();$ok=true;}catch(Throwable $e2){}
+      if(!$ok&&is_executable('/usr/sbin/sendmail')){try{$m->isSendmail();$m->send();$ok=true;}catch(Throwable $e3){}}
+      if(!$ok)throw new Exception('Your hosting did not accept the email (PHP mail is disabled or the From address is not allowed). Set the From email to a mailbox on your own domain, or switch to SMTP in Settings → Messaging → Email. ('.$e->getMessage().')');}
     Usage::log('email',$m->Mailer);
     return $m->getLastMessageID();}
   static function html($text,$pixel=''){

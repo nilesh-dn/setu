@@ -3,7 +3,7 @@ final class Seed{
   static function settings(){return [
     'company_name'=>'Digital Nil Marketing Agency LLP','company_address'=>'Digital Nil, 4th Floor, Palash Nine, 1/13, MITCON compound, Balewadi, near Amar Tech Park, Pune, Maharashtra 411045','company_phone'=>'7776090443','company_email'=>'ceo@digitalnil.com','company_website'=>'https://www.digitalnil.com/','company_tagline'=>'Website Design • SEO • Google Maps Ranking','company_logo'=>'assets/img/default-logo.png','sender_name'=>'Digital Nil Team',
     'company_about'=>"We are a performance-focused digital marketing agency from Pune. We help local businesses get found on Google Search and Google Maps, turn visitors into enquiries, and track every lead – with transparent monthly reporting.",
-    'mod_prospecting'=>'1','mail_transport'=>'php','gcal_calendar'=>'primary','gcal_meet'=>'1','gcal_invite'=>'1',
+    'mod_prospecting'=>'1','report_delivery'=>'both','report_cta'=>'Book a free strategy call','mail_transport'=>'php','gcal_calendar'=>'primary','gcal_meet'=>'1','gcal_invite'=>'1',
     'brand_primary'=>'#0B0B0B','brand_accent'=>'#B8860B','brand_bg'=>'#FFFFFF','brand_text'=>'#1A1A1A','font_heading'=>'DejaVu Sans','font_body'=>'DejaVu Sans',
     'currency'=>'INR','currency_symbol'=>'₹','yearly_fee'=>'72000','website_fee'=>'25000','services'=>"Local SEO & Google Business Profile optimisation\nGoogle Maps ranking (top 3 local pack)\nOn-page SEO & technical fixes\nReview generation system\nWebsite design & speed optimisation\nMonthly performance reports",
     'timezone'=>'Asia/Kolkata','default_country_code'=>'91','maps_source'=>'places','maps_language'=>'en','maps_region'=>'in','pagespeed'=>'0','deep_crawl'=>'1',

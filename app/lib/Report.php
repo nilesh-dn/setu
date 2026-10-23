@@ -81,12 +81,11 @@ TXT;
     if(empty($d['sources'])&&!empty($brief['sources']))$d['sources']=$brief['sources'];
     $P(86,'Designing the PDF: charts, illustrations & layout');
     $tok=token(16);
-    $P(92,'Rendering PDF pages');
-    $pdf=self::build($lead,$a,$d,$hasWeb,$comp,$p['id']);
+    $file='';
+    if(report_mode()!=='link'){
+      $P(92,'Rendering PDF pages');
+      $file=self::save($tok,$lead['name'],self::build($lead,$a,$d,$hasWeb,$comp,$p['id']));}
     $P(97,'Saving report');
-    $file='storage/reports/'.date('Ym').'/'.preg_replace('/[^a-z0-9]+/i','-',mb_substr($lead['name'],0,40)).'-'.$tok.'.pdf';
-    @mkdir(dirname(ROOT.'/'.$file),0755,true);
-    file_put_contents(ROOT.'/'.$file,$pdf);
     return DB::insert('reports',['lead_id'=>$leadId,'prompt_id'=>$p['id'],'token'=>$tok,'html'=>je($d),'pdf'=>$file]);}
   // Replace emojis / symbols the PDF fonts cannot draw (they show as "?")
   static function glyphs($s){
@@ -133,13 +132,13 @@ TXT;
     $op=$d['opportunity']??[];$cv=$n($op['customer_value']??0);$ce=$n($op['current_enquiries_month']??0);$pe=$n($op['potential_enquiries_month']??0);$cr=$n($op['conversion_rate']??0);if($cr>1)$cr/=100;if($cr<=0)$cr=.2;
     $missed=max(0,(int)round($pe-$ce));$rev=round($missed*12*$cr*$cv);
     $css=self::fonts()."@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'$fb',Inter,sans-serif;color:#1E293B;font-size:10pt;line-height:1.5}h1,h2,h3{font-family:'$fh',InterTight,sans-serif;margin:0;color:#0F172A}p{margin:0 0 7px}table{border-collapse:collapse}td{vertical-align:top}"
-      .".pg{padding:34px 46px 0;page-break-before:always}.pg.first{page-break-before:auto}.pg.full{padding:0}"
+      .".pg{position:relative;height:790px;page-break-before:always}.pg.first{page-break-before:auto}.pg.full{height:auto}.in{position:absolute;top:34px;left:46px;right:46px;height:740px;overflow:hidden}"
       .".kick{display:inline-block;font-size:7.5pt;letter-spacing:2px;text-transform:uppercase;font-weight:700;color:#fff;background:$P;border-radius:20px;padding:6px 13px 5px;line-height:1}.pt{font-family:'$fh',InterTight;font-size:22pt;font-weight:800;color:#0F172A;line-height:1.15;margin-top:10px}.ps{color:#64748B;font-size:10pt;margin-top:5px}.rule{height:4px;width:64px;background:$A;border-radius:2px;margin:12px 0 18px}"
       .".card{background:#fff;border:1px solid #E5E9F2;border-radius:14px;padding:16px 18px}.soft{background:$Pl;border-color:$Pl}.lbl{font-size:7.5pt;letter-spacing:1.3px;text-transform:uppercase;color:#64748B;font-weight:700;margin-bottom:6px}.big{font-family:'$fh',InterTight;font-size:24pt;font-weight:800;line-height:1.05;color:#0F172A}.sm{font-size:8.5pt;color:#64748B}.chip{display:inline-block;padding:2px 9px;border-radius:10px;font-size:7.5pt;font-weight:700}"
       .".w{width:100%}.fx{table-layout:fixed}.tbl{width:100%}.tbl th{text-align:left;font-size:7.5pt;letter-spacing:1px;text-transform:uppercase;color:#64748B;padding:7px 8px;border-bottom:2px solid #E5E9F2}.tbl td{padding:7px 8px;border-bottom:1px solid #EEF1F6;font-size:9.3pt}.me td{background:$Al;font-weight:700}"
       .".hl{background:$Al;border-left:5px solid $A;border-radius:10px;padding:13px 16px;font-size:11.5pt;color:#0F172A;font-weight:600;line-height:1.4}.num{display:inline-block;width:26px;height:26px;border-radius:13px;color:#fff;text-align:center;font-weight:700;font-size:10pt;line-height:1;padding-top:6px}";
     $head=fn($kick,$title,$sub='')=>'<span class="kick">'.$t($kick).'</span><div class="pt">'.$t($title,90).'</div>'.($sub?'<div class="ps">'.$t($sub,170).'</div>':'').'<div class="rule"></div>';
-    $page=fn($body,$cls='')=>'<div class="pg '.$cls.'">'.$body.'</div>';
+    $page=fn($body,$cls='')=>'<div class="pg '.$cls.'"><div class="in">'.$body.'</div></div>';
     $tile=fn($label,$val,$sub='',$c='#0F172A',$bg='#fff')=>'<div class="card" style="background:'.$bg.'"><div class="lbl">'.e($label).'</div><div class="big" style="color:'.$c.'">'.$val.'</div>'.($sub?'<div class="sm" style="margin-top:4px">'.$sub.'</div>':'').'</div>';
     $areaIc=fn($ar)=>self::AREA[$ar]??['#64748B','content'];
     $impC=fn($i)=>['high'=>['#FEE2E2','#B91C1C'],'medium'=>['#FEF3C7','#B45309'],'low'=>['#DCFCE7','#15803D']][strtolower((string)$i)]??['#F1F5F9','#475569'];
@@ -202,22 +201,20 @@ TXT;
     $o.='<div class="pg full"><table class="w"><tr><td style="width:57%;height:682px;padding:50px 54px"><span class="kick">Thank you</span><div class="pt" style="font-size:27pt;margin-top:12px">Let\'s fix what is holding you back</div><div class="rule"></div><p style="font-size:11pt;color:#334155">'.$t($d['closing']??'',280).'</p><p style="font-size:10pt;color:#475569;margin-top:12px">'.$t($S('company_about'),330).'</p><div class="card soft" style="margin-top:14px"><div class="lbl">What we do</div><table>'.$svc.'</table></div><div class="sm" style="margin-top:16px;font-size:7.8pt">Prepared on '.date('d M Y').' from live checks of the public website and Google listing. Market figures come from the sources named; projections are conservative estimates.</div></td><td style="background:'.$P.';vertical-align:middle;text-align:center;padding:44px 48px;height:694px"><img src="'.self::art('cta',$pid,$P,$A).'" style="width:250px"><div style="color:#fff;font-family:'.$fh.',InterTight;font-weight:800;font-size:18pt;margin-top:18px">Free 20-minute walkthrough</div><div style="color:#CBD5E1;font-size:10pt;margin-top:8px">We will go through this report with you – no obligation.</div><div style="background:#fff;border-radius:14px;padding:16px;margin-top:22px;text-align:left;font-size:10pt;color:#0F172A">'.($logo?'<div style="background:'.$P.';border-radius:10px;padding:8px;display:inline-block;margin-bottom:8px"><img src="'.$logo.'" style="height:38px"></div><br>':'').'<b>'.e($S('company_name')).'</b><br>'.e($S('company_phone')).'<br>'.e($S('company_email')).'<br>'.e(preg_replace('~^https?://|/$~','',$S('company_website'))).'</div></td></tr></table></div>';
     return '<!doctype html><html><head><meta charset="utf-8"><style>'.$css.'</style></head><body>'.$o.'</body></html>';}
   // ---------- Modern report: HTML/CSS for a real browser engine (Chromium), A4 landscape slides ----------
-  static function engine(){$e=setting('pdf_engine','builtin');return in_array($e,['browserless','pdfshift','gotenberg'],true)&&self::engineReady($e)?$e:'builtin';}
-  static function engineReady($e){return $e==='browserless'?setting('pdf_browserless_token')!=='':($e==='pdfshift'?setting('pdf_pdfshift_key')!=='':($e==='gotenberg'?setting('pdf_gotenberg_url')!=='':true));}
-  // Build the PDF with the best available engine; falls back to the built-in engine on any error
-  static function build($lead,$a,$d,$hasWeb,$comp,$pid=0){
-    $e=self::engine();
-    if($e!=='builtin'){try{return self::chromium(self::modern($lead,$a,$d,$hasWeb,$comp,$pid),$e);}catch(Throwable $x){logmsg('PDF engine '.$e.': '.$x->getMessage());}}
-    return self::pdf(self::render($lead,$a,$d,$hasWeb,$comp,$pid));}
-  static function chromium($html,$e){
-    if($e==='browserless'){$u=rtrim(setting('pdf_browserless_url','https://production-sfo.browserless.io'),'/').'/pdf?token='.rawurlencode(setting('pdf_browserless_token'));
-      $r=http($u,['json'=>['html'=>$html,'options'=>['landscape'=>true,'format'=>'A4','printBackground'=>true,'preferCSSPageSize'=>true,'margin'=>['top'=>'0','right'=>'0','bottom'=>'0','left'=>'0']],'gotoOptions'=>['waitUntil'=>'networkidle0','timeout'=>45000]],'timeout'=>90]);}
-    elseif($e==='pdfshift')$r=http('https://api.pdfshift.io/v3/convert/pdf',['json'=>['source'=>$html,'landscape'=>true,'format'=>'A4','margin'=>'0','use_print'=>true,'delay'=>800],'headers'=>['X-API-Key: '.setting('pdf_pdfshift_key')],'timeout'=>90]);
-    else{$b='----setu'.token(8);$body="--$b\r\nContent-Disposition: form-data; name=\"files\"; filename=\"index.html\"\r\nContent-Type: text/html\r\n\r\n$html\r\n";foreach(['landscape'=>'true','printBackground'=>'true','preferCssPageSize'=>'true','marginTop'=>'0','marginBottom'=>'0','marginLeft'=>'0','marginRight'=>'0','waitDelay'=>'1s'] as $k=>$v)$body.="--$b\r\nContent-Disposition: form-data; name=\"$k\"\r\n\r\n$v\r\n";$body.="--$b--\r\n";
-      $r=http(rtrim(setting('pdf_gotenberg_url'),'/').'/forms/chromium/convert/html',['body'=>$body,'headers'=>['Content-Type: multipart/form-data; boundary='.$b],'timeout'=>90]);}
-    Usage::log('pdf_'.$e,'report',1,0,0,null,$r['code']!==200);
-    if($r['code']!==200||strncmp($r['body'],'%PDF',4))throw new Exception('HTTP '.$r['code'].' '.mb_substr(strip_tags($r['body']),0,200).$r['error']);
-    return $r['body'];}
+  static function save($tok,$name,$pdf){
+    $file='storage/reports/'.date('Ym').'/'.preg_replace('/[^a-z0-9]+/i','-',mb_substr($name,0,40)).'-'.$tok.'.pdf';
+    @mkdir(dirname(ROOT.'/'.$file),0755,true);file_put_contents(ROOT.'/'.$file,$pdf);return $file;}
+  // Everything needed to (re)draw a stored report
+  static function ctx($r){
+    $l=DB::row('SELECT l.*,COALESCE(c.keyword,l.category) keyword FROM leads l LEFT JOIN campaigns c ON c.id=l.campaign_id WHERE l.id=?',[$r['lead_id']]);if(!$l)return null;
+    $a=jd($l['audit']);return [$l,$a,jd($r['html']),!empty($l['website'])&&empty($a['website']['meta']['down']),self::competitors($l),(int)$r['prompt_id']];}
+  // PDF file for a stored report – created on demand when missing
+  static function pdfFile($r){
+    if($r['pdf']&&is_file(ROOT.'/'.$r['pdf']))return ROOT.'/'.$r['pdf'];
+    $c=self::ctx($r);if(!$c)return null;
+    $f=self::save($r['token'],$c[0]['name'],self::pdf(self::render(...$c)));DB::update('reports',['pdf'=>$f],'id=?',[$r['id']]);return ROOT.'/'.$f;}
+  static function engine(){return 'builtin';}
+  static function build($lead,$a,$d,$hasWeb,$comp,$pid=0){return self::pdf(self::render($lead,$a,$d,$hasWeb,$comp,$pid));}
   static function modern($lead,$a,$d,$hasWeb,$comp,$pid=0){
     $S=fn($k,$x='')=>setting($k,$x);$n=fn($v)=>(float)preg_replace('/[^\d.]/','',(string)$v);
     $t=fn($s,$max=0)=>e($max?mb_strimwidth(self::glyphs($s),0,$max,'…'):self::glyphs($s));

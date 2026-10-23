@@ -21,9 +21,6 @@ final class Usage{
     'voice_vapi'=>['Vapi voice','minute','minutes',0.05,0,'month','https://vapi.ai/pricing','Platform fee; model, voice and telephony are billed on top.'],
     'voice_retell'=>['Retell AI voice','minute','minutes',0.07,0,'month','https://www.retellai.com/pricing',''],
     'voice_custom'=>['Other voice API','minute','minutes',0,0,'month','',''],
-    'pdf_browserless'=>['Browserless (report PDFs)','pdf','PDFs',0.0,1000,'month','https://www.browserless.io/pricing','Free plan includes about 1,000 units a month; one report uses about 1 unit.'],
-    'pdf_pdfshift'=>['PDFShift (report PDFs)','pdf','PDFs',0.009,50,'month','https://pdfshift.io/pricing','Free: 50 credits a month; paid plans from about $9 for 500 documents.'],
-    'pdf_gotenberg'=>['Gotenberg (own server)','pdf','PDFs',0,0,'month','https://gotenberg.dev','Free and open source – runs on your own server.'],
     'email'=>['Email sending','email','emails',0,0,'month','','Free with your hosting mailbox; hosts usually limit to a few hundred emails per hour.'],
     'gcal'=>['Google Calendar API','call','calls',0,1000000,'day','https://developers.google.com/calendar/api/guides/quota','Free (generous daily quota).']];}
   // Model prices in USD per 1M tokens [input, output]; editable in Usage → Prices
@@ -68,7 +65,6 @@ final class Usage{
       case 'whatsapp_api':return setting('wa_provider')==='generic'?['Active','green']:['Not added','gray'];
       case 'email':return Mailer::ready()?['Active · '.(Mailer::smtp()?'SMTP':'PHP mail'),'green']:['Not set up','amber'];
       case 'gcal':return GCal::ready()?['Connected','green']:['Not connected','gray'];}
-    if(strpos($k,'pdf_')===0)return Report::engine()===substr($k,4)?['Active','green']:(Report::engineReady(substr($k,4))&&setting(['pdf_browserless'=>'pdf_browserless_token','pdf_pdfshift'=>'pdf_pdfshift_key','pdf_gotenberg'=>'pdf_gotenberg_url'][$k])!==''?['Key added','teal']:['Not added','gray']);
     if(strpos($k,'voice_')===0)return setting('voice_provider')===substr($k,6)?(Voice::ready()?['Active','green']:['Incomplete','amber']):['Not added','gray'];
     if(isset(AI::providers()[$k]))return $has('ai_key_'.$k)?($ai===$k?['Active','green']:['Key added','teal']):['Not added','gray'];
     return ['—','gray'];}

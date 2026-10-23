@@ -43,8 +43,8 @@ final class Outreach{
     $r=DB::row('SELECT * FROM reports WHERE lead_id=? ORDER BY id DESC LIMIT 1',[$lead['id']]);
     if(!$r)throw new Exception('No report generated yet');
     $slug=preg_replace('/[^a-z0-9]+/i','-',mb_substr($lead['name'],0,40));
-    if(!is_file(ROOT.'/'.$r['pdf']))throw new Exception('Report PDF file is missing – regenerate the report');
-    $f=[['path'=>ROOT.'/'.$r['pdf'],'url'=>base_url('report.php?t='.$r['token'].'&dl=1'),'name'=>'Audit-Report-'.$slug.'.pdf']];
+    $f=[];
+    if(report_mode()!=='link'){$pf=Report::pdfFile($r);if(!$pf)throw new Exception('Report PDF could not be created - regenerate the report');$f[]=['path'=>$pf,'url'=>base_url('report.php?t='.$r['token'].'&dl=1'),'name'=>'Audit-Report-'.$slug.'.pdf'];}
     if(!$lead['website']&&($pp=setting('proposal_pdf'))&&is_file(ROOT.'/'.$pp))$f[]=['path'=>ROOT.'/'.$pp,'url'=>base_url('report.php?proposal='.$r['token']),'name'=>'Website-Proposal-'.preg_replace('/[^a-z0-9]+/i','-',setting('company_name','Agency')).'.pdf'];
     return $f;}
   static function contact($lid,$p=[]){
@@ -68,15 +68,17 @@ final class Outreach{
       if(!Mailer::ready()){$err[]='Email: SMTP not configured';event($lid,'error','Email not sent – configure SMTP in Settings → Email','email');}
       else try{
         [$sub,$body]=self::message('email'.$nw,$l);
+        if(report_mode()!=='pdf'&&strpos($body,'{{report_link}}')===false)$body.="\n\nYour report: {{report_link}}";
         $sub=tpl($sub,$vars);$text=tpl($body,$vars);$tk=token(12);
         $att=[];foreach($files as $f)$att[$f['name']]=$f['path'];
         $mid=Mailer::send($l['email'],$sub,Mailer::html($text,base_url('track.php?t='.$tk)),$text,$att);
         DB::insert('messages',['lead_id'=>$lid,'channel'=>'email','status'=>'sent','ext_id'=>mb_substr((string)$mid,0,190),'subject'=>$sub,'body'=>$text,'token'=>$tk]);
         DB::update('leads',['email_status'=>'sent'],'id=?',[$lid]);
-        event($lid,'sent','Email sent to '.$l['email'].' with '.count($att).' PDF attachment(s)','email');$ok++;}
+        event($lid,'sent','Email sent to '.$l['email'].($att?' with '.count($att).' PDF attachment(s)':' with the report link'),'email');$ok++;}
       catch(Throwable $e){DB::update('leads',['email_status'=>'failed'],'id=?',[$lid]);event($lid,'error','Email failed: '.$e->getMessage(),'email');$err[]='Email: '.$e->getMessage();}}
     if(in_array('whatsapp',$ch,true)&&setting('send_whatsapp')==='1'&&$l['phone']&&!in_array($l['wa_status'],['sent','delivered','read'],true)){
       [,$body]=self::message('whatsapp'.$nw,$l);
+      if(report_mode()!=='pdf'&&strpos($body,'{{report_link}}')===false)$body.="\n\nYour report: {{report_link}}";
       $text=tpl($body,$vars);
       try{
         $id=WhatsApp::send($l['phone'],$text,$files,$vars);
