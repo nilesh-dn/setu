@@ -14,6 +14,7 @@ final class Capture{
         http_response_code(403);exit('Invalid verify token');}
       if($_GET)$in=array_diff_key($_GET,['k'=>1]);else{echo 'Setu lead capture endpoint is active.';exit;}}
     DB::update('sources',['last_payload'=>mb_substr($raw?:je($in),0,20000),'last_at'=>date('Y-m-d H:i:s')],'id=?',[$src['id']]);
+    $map=(array)($cfg['map']??[]);
     $ids=[];
     switch($src['type']){
       case 'facebook':$ids=self::facebook($src,$cfg,$in,$raw);break;
@@ -21,10 +22,12 @@ final class Capture{
       default:
         if(!empty($in['_hp']))break; // honeypot spam
         unset($in['_hp']);
-        [$d,$c,$rest]=CRM::normalize($in);
+        self::learn($src,$cfg,$in);
+        [$d,$c,$rest]=CRM::normalize($in,$map);
         if(!$d&&!$c)break;
         if($rest)$d['message']=trim(($d['message']??'')."\n".implode("\n",array_map(fn($k,$v)=>ucfirst(str_replace('_',' ',$k)).": $v",array_keys($rest),$rest)));
-        $page=$_SERVER['HTTP_REFERER']??'';
+        [,,$meta]=CRM::flatten($in);
+        $page=$meta['page_url']??($_SERVER['HTTP_REFERER']??'');
         $ids[]=CRM::create($d,$src['type'],$src['name'].($page?' · '.parse_url($page,PHP_URL_HOST).parse_url($page,PHP_URL_PATH):''),$c);}
     if($ids)DB::q('UPDATE sources SET received=received+? WHERE id=?',[count($ids),$src['id']]);
     return $ids;}
@@ -38,11 +41,12 @@ final class Capture{
       $r=http_json('https://graph.facebook.com/v21.0/'.rawurlencode($lg).'?'.http_build_query(['access_token'=>$tk,'fields'=>'field_data,created_time,ad_name,campaign_name,form_id,platform']),['timeout'=>20]);
       if($r['code']!==200){logmsg('Meta lead fetch failed: '.substr($r['body'],0,300));continue;}
       $fd=[];foreach($r['data']['field_data']??[] as $f)$fd[$f['name']]=implode(', ',$f['values']??[]);
-      [$d,$c,$rest]=CRM::normalize($fd);
+      DB::update('sources',['last_payload'=>je($fd)],'id=?',[$src['id']]);self::learn($src,$cfg,$fd);
+      [$d,$c,$rest]=CRM::normalize($fd,(array)($cfg['map']??[]));
       if($rest)$d['message']=trim(($d['message']??'')."\n".implode("\n",array_map(fn($k,$v)=>ucfirst(str_replace('_',' ',$k)).": $v",array_keys($rest),$rest)));
       $ids[]=CRM::create($d,'facebook',trim(($r['data']['campaign_name']??'').' · '.($r['data']['ad_name']??''),' ·'),$c,['leadgen_id'=>$lg,'form_id'=>$v['form_id']??'','platform'=>$r['data']['platform']??'']);}
     // Also accept already-flattened payloads (Zapier/Make "Facebook Lead Ads" apps)
-    if(!$ids&&empty($in['entry'])&&$in){[$d,$c]=CRM::normalize($in);if($d)$ids[]=CRM::create($d,'facebook',$src['name'],$c);}
+    if(!$ids&&empty($in['entry'])&&$in){self::learn($src,$cfg,$in);[$d,$c]=CRM::normalize($in,(array)($cfg['map']??[]));if($d)$ids[]=CRM::create($d,'facebook',$src['name'],$c);}
     return $ids;}
   private static function google($src,$cfg,$in){
     if(!empty($cfg['google_key'])&&($in['google_key']??'')!==$cfg['google_key']){http_response_code(401);exit('Invalid key');}
@@ -56,6 +60,11 @@ final class Capture{
     if($rest)$d['message']=implode("\n",array_map(fn($k,$v)=>"$k: $v",array_keys($rest),$rest));
     $test=!empty($in['is_test']);
     return [CRM::create($d,'google',($test?'TEST · ':'').'Campaign '.($in['campaign_id']??'').($in['gcl_id']??''?' · gclid':''),[],['lead_id'=>$in['lead_id']??'','form_id'=>$in['form_id']??'','gcl_id'=>$in['gcl_id']??''])];}
+  // Remember the field names a source sends (with a sample value) so they can be mapped in Settings
+  private static function learn($src,&$cfg,$in){
+    [$f,$lab]=CRM::flatten($in);$k=(array)($cfg['keys']??[]);$ch=false;
+    foreach($f as $nk=>$v){$s=mb_substr(trim((string)$v),0,60);if(!isset($k[$nk])||$k[$nk][1]!==$s){$k[$nk]=[mb_substr((string)($lab[$nk]??$nk),0,60),$s];$ch=true;}}
+    if($ch){$cfg['keys']=array_slice($k,-40,null,true);DB::update('sources',['config'=>je($cfg)],'id=?',[$src['id']]);}}
   // Ready-to-paste HTML form for a website source
   static function snippet($s){
     $u=self::url($s);$acc=setting('brand_accent','#B8860B');

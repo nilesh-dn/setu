@@ -3,21 +3,44 @@
 final class CRM{
   const CORE=['name','contact_name','email','phone','alt_phone','website','address','city','category','service','deal_value','message','tags','follow_up_at'];
   static function fields(){static $f=null;return $f??=DB::all('SELECT * FROM fields ORDER BY sort,id');}
-  // Map loose incoming keys (from forms, ads, webhooks) to Setu fields
-  static function normalize($in){
-    $map=['name'=>['company','company_name','business','business_name','organisation','organization','firm'],'contact_name'=>['name','full_name','fullname','your_name','first_name','contact','contact_name','customer_name','person'],'email'=>['email','email_address','e-mail','your_email','mail'],'phone'=>['phone','phone_number','mobile','mobile_number','contact_number','whatsapp','tel','telephone','your_phone','number'],'city'=>['city','location','town'],'address'=>['address','street_address','full_address'],'website'=>['website','url','site','web'],'service'=>['service','services','interested_in','product','requirement_type','enquiry_for','subject'],'message'=>['message','your_message','comments','comment','query','enquiry','details','description','notes'],'deal_value'=>['budget','deal_value','amount','value']];
-    $out=[];$rest=[];
+  const ALIAS=['name'=>['company','company_name','business','business_name','organisation','organization','firm','shop_name'],'contact_name'=>['name','full_name','fullname','your_name','first_name','contact','contact_name','customer_name','person'],'email'=>['email','email_address','e_mail','your_email','mail','work_email'],'phone'=>['phone','phone_number','mobile','mobile_number','contact_number','whatsapp','whatsapp_number','tel','telephone','your_phone','number','work_phone'],'alt_phone'=>['alt_phone','alternate_phone','phone_2','landline'],'city'=>['city','location','town'],'address'=>['address','street_address','full_address'],'website'=>['website','url','site','web','website_url'],'service'=>['service','services','interested_in','product','requirement_type','enquiry_for','subject','select_service'],'message'=>['message','your_message','comments','comment','query','enquiry','details','description','notes','requirement'],'deal_value'=>['budget','deal_value','amount','value']];
+  // Form-tool metadata that should not become lead fields
+  const META=['page_url','user_agent','remote_ip','powered_by','referrer','referer','form_id','form_name','queried_id','g_recaptcha_response','_csrf','k','redirect','_hp','submit','action','nonce','wpnonce','hp','csrf','wp_http_referer'];
+  static function key($k){return trim(strtolower(preg_replace('/[^a-z0-9]+/i','_',trim((string)$k))),'_');}
+  // Which Setu field an incoming key fills automatically ('' = saved in notes)
+  static function auto($nk){foreach(self::ALIAS as $f=>$alts)if(in_array($nk,$alts,true))return $f;foreach(self::fields() as $f)if($f['fkey']===$nk)return 'cf:'.$f['fkey'];if($nk==='last_name')return 'contact_name';
+    // Loose match for labels like "Your mobile number" or "Which service?"
+    foreach(['email'=>'email','mail'=>'email','phone'=>'phone','mobile'=>'phone','whatsapp'=>'phone','contact_no'=>'phone','company'=>'name','business'=>'name','budget'=>'deal_value','service'=>'service','city'=>'city','address'=>'address','website'=>'website','message'=>'message','requirement'=>'message','enquiry'=>'message','name'=>'contact_name'] as $w=>$f)if(strpos($nk,$w)!==false)return $f;
+    return '';}
+  // Flatten payloads from Elementor (simple + "Advanced data"), nested JSON etc. Returns [fields, labels, meta]
+  static function flatten($in){
+    $lab=[];$meta=[];
+    if(isset($in['fields'])&&is_array($in['fields'])){
+      $f=[];foreach($in['fields'] as $k=>$x)if(is_array($x)&&array_key_exists('value',$x)){$id=self::key($x['id']??$k);$f[$id]=$x['value'];$lab[$id]=$x['title']??$id;}
+      foreach((array)($in['meta']??[]) as $k=>$x)$meta[self::key($k)]=is_array($x)?($x['value']??''):$x;
+      if(isset($in['form']['name']))$meta['form_name']=$in['form']['name'];
+      $in=$f+array_diff_key($in,['fields'=>1,'meta'=>1,'form'=>1]);}
+    $out=[];
     foreach($in as $k=>$v){
+      $nk=self::key($k);if($nk==='')continue;
+      if(is_array($v)&&$v&&array_keys($v)!==range(0,count($v)-1)){$px=in_array($nk,['form_fields','fields','data','lead','contact','input','form'],true)?'':$nk.'_';foreach($v as $k2=>$v2)if(is_scalar($v2)){$out[$px.self::key($k2)]=$v2;$lab[$px.self::key($k2)]=$px?$k.' › '.$k2:(string)$k2;}continue;}
       if(is_array($v))$v=implode(', ',array_map('strval',array_filter($v,'is_scalar')));
+      $out[$nk]=$v;$lab[$nk]??=(string)$k;}
+    $pw=isset($out['powered_by']);
+    foreach($out as $k=>$v)if(in_array($k,self::META,true)||($pw&&in_array($k,['date','time'],true))){$meta[$k]=$v;unset($out[$k]);}
+    return [$out,$lab,$meta];}
+  // Map incoming keys to Setu fields. $map = [incoming_key => setu_field | 'cf:key' | 'message' | 'ignore'] overrides automatic detection
+  static function normalize($in,$map=[]){
+    [$in,$lab]=self::flatten($in);
+    $out=[];$rest=[];$custom=[];
+    foreach($in as $nk=>$v){
       $v=trim((string)$v);if($v==='')continue;
-      $nk=strtolower(preg_replace('/[^a-z0-9]+/i','_',trim((string)$k)));
-      $hit=false;
-      foreach($map as $f=>$alts)if(in_array($nk,$alts,true)&&!isset($out[$f])){$out[$f]=$v;$hit=true;break;}
-      if(!$hit&&$nk==='last_name'&&isset($out['contact_name'])){$out['contact_name'].=' '.$v;$hit=true;}
-      if(!$hit)$rest[$nk]=$v;}
-    $custom=[];
-    foreach(self::fields() as $f)if(isset($rest[$f['fkey']])){$custom[$f['fkey']]=$rest[$f['fkey']];unset($rest[$f['fkey']]);}
-    unset($rest['_csrf'],$rest['k'],$rest['redirect'],$rest['g_recaptcha_response']);
+      $t=$map[$nk]??'';if($t==='')$t=self::auto($nk);if($t===''&&isset($lab[$nk]))$t=self::auto(self::key($lab[$nk]));
+      if($t==='ignore')continue;
+      if(strncmp($t,'cf:',3)===0){$custom[substr($t,3)]=$v;continue;}
+      if($t==='message'&&isset($out['message'])){$rest[$nk]=$v;continue;}
+      if($t!==''&&in_array($t,self::CORE,true)||$t==='message'){if(isset($out[$t])&&in_array($t,['contact_name','name','address'],true))$out[$t].=' '.$v;elseif(!isset($out[$t]))$out[$t]=$v;else $rest[$nk]=$v;continue;}
+      $rest[$nk]=$v;}
     return [$out,$custom,$rest];}
   // Create (or merge into a recent duplicate) a CRM lead. Returns lead id.
   static function create($d,$source='manual',$detail='',$custom=[],$extra=[]){

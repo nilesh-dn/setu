@@ -1,14 +1,49 @@
 <?php
 use Dompdf\Dompdf;use Dompdf\Options;
+// Landscape, slide-style audit report built from structured AI output
 final class Report{
-  const SYSTEM="You are a senior local SEO, Google Business Profile and conversion consultant with 15 years of experience. You write premium, deeply researched audit reports on behalf of a digital marketing agency; the report is sent to the business owner to win them as a client, so it must feel genuine, specific and expert – never generic.\nOUTPUT RULES: Return ONLY an HTML fragment (no <html>, <head>, <body>, no markdown, no code fences). Allowed tags: h2, h3, p, ul, ol, li, strong, em, table, thead, tbody, tr, th, td, blockquote, br. No inline styles, images or scripts. Score gauges, charts and the detailed check list are added automatically – do not repeat them as raw lists. Use the business name naturally. Never invent measurements that are not in the data; when estimating (search demand, customer value, enquiries) clearly label it as an estimate and keep it conservative.";
-  const PLACES=['cover'=>'Cover','summary'=>'Executive summary','journey'=>'Customer journey','website'=>'Website','maps'=>'Google Maps','competitors'=>'Competitors','growth'=>'Revenue / ROI','plan'=>'Action plan','tips'=>'Quick wins','why'=>'Why us','cta'=>'Next step / closing','any'=>'Any section'];
+  const SYSTEM=<<<'TXT'
+You are a senior local-marketing consultant (Google Business Profile, local SEO, websites and conversion) with 15 years of experience helping small businesses. You are preparing an honest, genuinely useful growth review for a business owner on behalf of a digital marketing agency.
+
+PRINCIPLES
+- Give real value first: the owner should learn something useful even if they never hire anyone. Be specific to their business type, city and the audit data.
+- Be calm and respectful. No hype, no pressure, no exaggerated promises, no "act now" language. Mention the agency only in "how_we_help" and "closing".
+- Use only facts from the audit data for anything you say about THEIR business. For market/industry statistics, include only figures you are confident are real and attributable, with the publisher and year as "source". If unsure, leave the stat out. Clearly treat projections as estimates and keep them conservative.
+- Write in clear, simple English (Indian English is fine). Plain text only inside JSON strings: no HTML, no markdown, no emojis.
+
+OUTPUT: return ONLY one valid JSON object (no code fences, no text before or after) with exactly these keys:
+{
+ "summary": "2 short paragraphs separated by \n\n: where they stand today and what matters most",
+ "headline": "one sentence: the single biggest opportunity",
+ "strengths": ["3-4 things they already do well"],
+ "market": {"search_term": "the main search customers use", "monthly_searches": number, "insight": "2-3 sentences on how customers in their city choose this kind of business", "stats": [{"value": "e.g. 76%", "label": "short explanation", "source": "publisher, year"}]},
+ "journey": {"monthly_searches": number, "profile_views": number, "actions": number, "customers": number, "note": "one sentence explaining these are estimates and how they were reached"},
+ "competitors_insight": "2-3 sentences comparing them with the named competitors using the numbers",
+ "findings": [{"area": "Google Maps|Reviews|Website|Speed|Content|Conversion|Trust|Social", "title": "short", "found": "what we found (with numbers)", "why": "why it matters for customers or revenue", "fix": "the specific recommendation", "impact": "High|Medium|Low", "effort": "Low|Medium|High"}],
+ "opportunity": {"customer_value": number, "current_enquiries_month": number, "potential_enquiries_month": number, "conversion_rate": number, "assumptions": "one or two sentences"},
+ "outcomes": [{"metric": "e.g. Calls from Google Maps", "today": "estimate or fact", "target": "realistic target", "timeframe": "e.g. 6 months"}],
+ "plan": [{"phase": "Weeks 1-2", "title": "short", "actions": ["2-4 actions"], "result": "what changes"}],
+ "quick_wins": [{"title": "short", "how": "one or two sentences they can do themselves"}],
+ "how_we_help": [{"service": "name", "what": "what we would do for them specifically", "result": "expected result"}],
+ "closing": "2-3 warm sentences, no pressure"
+}
+Provide 3-4 market stats, 6-9 findings ordered by impact, 3-4 outcomes, 4 plan phases, 5 quick wins and 3-4 how_we_help items. Numbers must be plain numbers (no currency symbols or commas).
+TXT;
+  const PLACES=['cover'=>'Cover','summary'=>'At a glance','journey'=>'Market & customers','website'=>'Findings – website','maps'=>'Findings – Google Maps','competitors'=>'Competitors','growth'=>'Opportunity','plan'=>'Roadmap','tips'=>'Quick wins','why'=>'How we help','cta'=>'Closing page','any'=>'Any section'];
+  const AREA=['Google Maps'=>['#EF4444','maps'],'Reviews'=>['#F59E0B','reviews'],'Website'=>['#3B82F6','website'],'Speed'=>['#8B5CF6','speed'],'Content'=>['#14B8A6','content'],'Conversion'=>['#EC4899','conversion'],'Trust'=>['#6366F1','trust'],'Social'=>['#0EA5E9','social']];
   static function competitors($lead){
     if(!$lead['campaign_id'])return [];
     return DB::all('SELECT name,rating,reviews,position,website FROM leads WHERE campaign_id=? AND id<>? ORDER BY position LIMIT 5',[$lead['campaign_id'],$lead['id']]);}
   static function prompt($type,$id=null){
     return $id?DB::row('SELECT * FROM prompts WHERE id=?',[$id]):DB::row('SELECT * FROM prompts WHERE type=? ORDER BY is_active DESC,id LIMIT 1',[$type]);}
   static function compact($audit){return je(array_map(fn($c)=>['area'=>$c['cat']??'','check'=>$c['label'],'status'=>$c['status'],'detail'=>$c['detail']],$audit['checks']??[]));}
+  // Pull the JSON object out of an AI reply (tolerates code fences / stray text)
+  static function parse($raw){
+    $s=trim(preg_replace('~^```(?:json)?|```$~m','',$raw));
+    $a=strpos($s,'{');$b=strrpos($s,'}');
+    if($a===false||$b===false)return null;
+    $d=json_decode(substr($s,$a,$b-$a+1),true);
+    return is_array($d)&&!empty($d['summary'])?$d:null;}
   static function generate($leadId,$opt=[],$progress=null){
     $P=fn($p,$m)=>$progress?$progress($p,$m):null;
     $lead=DB::row('SELECT l.*,COALESCE(c.keyword,l.category) keyword FROM leads l LEFT JOIN campaigns c ON c.id=l.campaign_id WHERE l.id=?',[$leadId]);
@@ -22,30 +57,33 @@ final class Report{
     $cats=array_merge($a['website']['cats']??[],$a['map']['cats']??[]);
     $vars=lead_vars($lead,['web_score'=>$lead['web_score']??'N/A','map_score'=>$lead['map_score']??'N/A','web_categories'=>$cats?implode(', ',array_map(fn($k,$v)=>"$k $v/100",array_keys($cats),$cats)):'n/a','position'=>$lead['position']?:'n/a','website_audit'=>$hasWeb?self::compact($a['website']??[]):'No website','map_audit'=>self::compact($a['map']??[]),'competitors'=>$comp?je($comp):'none found','services'=>str_replace("\n",'; ',setting('services'))]);
     $P(65,'AI is researching & writing the report (usually 1–3 min)');
-    $raw=AI::complete(self::SYSTEM,tpl($p['content'],$vars),16000,null,['research'=>setting('ai_web_research','1')==='1']);
-    $data=[];if(preg_match('~<!--\s*DATA\s*(\{.*?\})\s*-->~s',$raw,$m))$data=json_decode($m[1],true)?:[];
-    $html=self::clean($raw);
-    if(mb_strlen(strip_tags($html))<300)throw new Exception('The AI returned an unusually short report – please try again.');
+    $user=tpl($p['content'],$vars);
+    $research=setting('ai_web_research','1')==='1';
+    $raw=AI::complete(self::SYSTEM,$user,16000,null,['research'=>$research,'op'=>'report']);
+    $d=self::parse($raw);
+    if(!$d){$P(78,'Tidying the AI answer');$raw=AI::complete(self::SYSTEM,$user."\n\nIMPORTANT: your previous answer was not valid JSON. Reply with the JSON object only.",16000,null,['op'=>'report']);$d=self::parse($raw);}
+    if(!$d)throw new Exception('The AI did not return a usable report. Please try again or use a different model.');
     $P(86,'Designing the PDF: charts, illustrations & layout');
     $tok=token(16);
-    $full=self::render($lead,$a,$html,$hasWeb,$comp,$data,$p['id']);
+    $full=self::render($lead,$a,$d,$hasWeb,$comp,$p['id']);
     $P(92,'Rendering PDF pages');
     $pdf=self::pdf($full);
     $P(97,'Saving report');
     $file='storage/reports/'.date('Ym').'/'.preg_replace('/[^a-z0-9]+/i','-',mb_substr($lead['name'],0,40)).'-'.$tok.'.pdf';
     @mkdir(dirname(ROOT.'/'.$file),0755,true);
     file_put_contents(ROOT.'/'.$file,$pdf);
-    return DB::insert('reports',['lead_id'=>$leadId,'prompt_id'=>$p['id'],'token'=>$tok,'html'=>$html.($data?'<!--DATA '.je($data).' -->':''),'pdf'=>$file]);}
-  static function clean($h){
-    $h=preg_replace('~^```(?:html)?\s*|\s*```$~i','',trim($h));
-    $h=preg_replace('~<(script|style|head)[^>]*>.*?</\1>~is','',$h);
-    $h=preg_replace('~<!--.*?-->~s','',$h);
-    $h=strip_tags($h,'<h2><h3><p><ul><ol><li><strong><b><em><i><table><thead><tbody><tr><th><td><blockquote><br>');
-    return trim(preg_replace('~<(\w+)\s[^>]*>~','<$1>',$h));}
-  static function col($s){return $s>=75?'#15803d':($s>=50?'#b45309':'#b91c1c');}
-  static function fontFace($name){
-    $f=STORAGE.'/fonts/'.preg_replace('/[^a-z0-9_-]/i','',$name).'.ttf';
-    return is_file($f)?"@font-face{font-family:'$name';src:url('".str_replace('\\','/',$f)."') format('truetype');}":'';}
+    return DB::insert('reports',['lead_id'=>$leadId,'prompt_id'=>$p['id'],'token'=>$tok,'html'=>je($d),'pdf'=>$file]);}
+  // Replace emojis / symbols the PDF fonts cannot draw (they show as "?")
+  static function glyphs($s){
+    $s=strtr((string)$s,['✔'=>'✓','✅'=>'✓','☑'=>'✓','✘'=>'×','✗'=>'×','❌'=>'×','➡'=>'→','👉'=>'→','⭐'=>'★','🌟'=>'★','“'=>'“','”'=>'”','‘'=>'‘','’'=>'’','—'=>'–']);
+    $s=preg_replace_callback('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}\x{2B00}-\x{2BFF}\x{FE00}-\x{FE0F}\x{200D}\x{20E3}]/u',fn($m)=>in_array($m[0],['✓','★','☆','×','→'],true)?$m[0]:'',$s);
+    return trim(preg_replace('/[ \t]{2,}/',' ',$s));}
+  static function t($s){return e(self::glyphs($s));}
+  static function fonts(){
+    $F=str_replace('\\','/',ROOT.'/app/fonts/');$o='';
+    foreach([['Inter',400,'Inter-Regular'],['Inter',500,'Inter-Medium'],['Inter',600,'Inter-SemiBold'],['Inter',700,'Inter-Bold'],['InterD',600,'InterDisplay-SemiBold'],['InterD',700,'InterDisplay-Bold'],['InterD',800,'InterDisplay-ExtraBold']] as [$f,$w,$n])$o.="@font-face{font-family:'$f';font-weight:$w;src:url('$F$n.ttf') format('truetype');}";
+    foreach(array_unique([setting('font_heading'),setting('font_body')]) as $n){$f=STORAGE.'/fonts/'.preg_replace('/[^a-z0-9_-]/i','',$n).'.ttf';if($n&&is_file($f))$o.="@font-face{font-family:'$n';src:url('".str_replace('\\','/',$f)."') format('truetype');}";}
+    return $o;}
   static function fileUri($f){
     if(!is_file($f))return '';
     $mime=mime_content_type($f)?:'image/png';
@@ -60,96 +98,94 @@ final class Report{
     if(!$r&&$key!=='cover'){$any??=DB::all('SELECT file FROM assets WHERE placement=\'any\' AND (prompt_id=? OR prompt_id IS NULL)',[$pid]);if($any)$r=$any[array_rand($any)];}
     if($r&&($u=self::fileUri(ROOT.'/'.$r['file'])))return $u;
     return Illus::uri(Illus::get($key,$P,$A));}
-  static function render($lead,$a,$body,$hasWeb,$comp,$data=[],$pid=0){
-    $S=fn($k,$d='')=>setting($k,$d);
-    $pri=$S('brand_primary','#0B0B0B');$acc=$S('brand_accent','#B8860B');$txt=$S('brand_text','#1A1A1A');
-    $fh=$S('font_heading','DejaVu Sans');$fb=$S('font_body','DejaVu Sans');
-    $pl=Illus::tint($pri,.92);$al=Illus::tint($acc,.85);
-    $logo=self::logo();$cur=$S('currency_symbol','₹');
+  static function render($lead,$a,$d,$hasWeb,$comp,$pid=0){
+    $S=fn($k,$x='')=>setting($k,$x);$t=fn($s)=>self::t($s);$n=fn($v)=>(float)preg_replace('/[^\d.]/','',(string)$v);
+    $P=$S('brand_primary','#0B0B0B');$A=$S('brand_accent','#B8860B');
+    $fh=$S('font_heading','')&&!in_array($S('font_heading'),['DejaVu Sans','Helvetica','Times-Roman','Courier'],true)?$S('font_heading'):'InterD';
+    $fb=$S('font_body','')&&!in_array($S('font_body'),['DejaVu Sans','Helvetica','Times-Roman','Courier'],true)?$S('font_body'):'Inter';
+    $Pl=Illus::tint($P,.93);$Al=Illus::tint($A,.86);$Am=Illus::tint($A,.55);
+    $cur=$S('currency_symbol','₹');$money=fn($v)=>$cur.number_format((float)$v);
     $ws=$hasWeb?(int)$lead['web_score']:null;$ms=(int)$lead['map_score'];
     $overall=$ws===null?$ms:(int)round($ws*.55+$ms*.45);
     $checks=array_merge(array_map(fn($c)=>$c+['src'=>'Google Maps'],$a['map']['checks']??[]),$hasWeb?array_map(fn($c)=>$c+['src'=>'Website'],$a['website']['checks']??[]):[]);
     $cnt=['pass'=>0,'warn'=>0,'fail'=>0];foreach($checks as $c)$cnt[$c['status']]++;
-    $mm=$a['map']['meta']??[];$wm=$a['website']['meta']??[];
-    $title=$hasWeb?'Website & Google Maps Audit':'Google Maps Audit & Website Proposal';
-    $css=self::fontFace($fh).self::fontFace($fb)."@page{margin:64px 48px 64px 48px}body{font-family:'$fb',DejaVu Sans,sans-serif;color:$txt;font-size:10.2pt;line-height:1.6}h1,h2,h3,h4{font-family:'$fh',DejaVu Sans,sans-serif;color:$pri;line-height:1.25;margin:0}h2{font-size:17pt;margin:0 0 4px}h3{font-size:12pt;margin:16px 0 6px;color:$pri}p{margin:0 0 9px}ul,ol{margin:0 0 10px 0;padding-left:18px}li{margin-bottom:5px}table.t{width:100%;border-collapse:collapse;margin:10px 0 16px}.t th{background:$pri;color:#fff;text-align:left;padding:8px;font-size:9pt}.t td{padding:8px;border-bottom:1px solid #e8e8ee;vertical-align:top;font-size:9.2pt}.t tr:nth-child(even) td{background:#fafafc}strong,b{color:$pri}blockquote{border-left:5px solid $acc;margin:12px 0;padding:10px 16px;background:$al;font-size:11pt;color:$pri}.sm{font-size:8.6pt;color:#6b7280}.pb{page-break-after:always}.np{page-break-before:always}.kick{font-size:8.5pt;letter-spacing:2.5px;text-transform:uppercase;color:$acc;font-weight:bold;margin-bottom:4px}.bar{height:4px;width:60px;background:$acc;margin:8px 0 16px}#hd{position:fixed;top:-44px;left:0;right:0;font-size:7.5pt;color:#9ca3af}#hd td{padding:0}#ft{position:fixed;bottom:-44px;left:0;right:0;font-size:7.5pt;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:6px}"
-      .".cover{position:absolute;top:-64px;left:-48px;width:794px;height:1123px;background:$pri;color:#fff}.cv{padding:70px 64px 0}.cv .lg{height:90px}.cv .k{color:$acc;letter-spacing:4px;font-size:9.5pt;margin-top:36px;text-transform:uppercase;font-weight:bold}.cv h1{color:#fff;font-size:32pt;margin:10px 0 8px;line-height:1.15}.cv .for{font-size:15pt;color:$acc}.cv .meta{margin-top:18px;font-size:9.5pt;color:#d1d5db;line-height:1.8}.cv .art{text-align:center;margin-top:24px}.cv .art img{width:430px}.cvf{position:absolute;bottom:56px;left:64px;right:64px;font-size:8.5pt;color:#9ca3af;border-top:1px solid #374151;padding-top:12px}.cvb{position:absolute;bottom:0;left:0;width:794px;height:10px;background:$acc}"
-      .".tile{border:1px solid #ececf2;border-radius:10px;padding:12px 14px;background:#fff}.tile .v{font-size:19pt;font-weight:bold;color:$pri;font-family:'$fh',DejaVu Sans}.tile .l{font-size:8pt;color:#6b7280;text-transform:uppercase;letter-spacing:1px}.tile .s{font-size:8.5pt;color:#6b7280}.card{border:1px solid #ececf2;border-radius:12px;padding:16px 18px;margin-bottom:14px;background:#fff}.soft{background:$pl;border:0}.pri{border-radius:8px;padding:9px 12px;margin-bottom:7px;background:#fff7f7;border-left:4px solid #E8554E}.pri.w{background:#fffbeb;border-left-color:#F2A41C}.pri b{color:#111827}.sec-h td{vertical-align:middle}.sec-h img{width:150px}.chip{display:inline-block;padding:2px 9px;border-radius:10px;font-size:8pt;font-weight:bold}.cat{margin:14px 0 4px;font-size:11pt;font-weight:bold;color:$pri}.ck td{padding:7px 8px;border-bottom:1px solid #f0f0f4;vertical-align:top;font-size:9pt}.ck .ic{width:20px;font-weight:bold;font-size:12pt;text-align:center}.cta{background:$pri;color:#fff;border-radius:14px;padding:22px 24px}.cta h2,.cta h3{color:$acc}.cta b,.cta strong{color:$acc}.svc td{padding:6px 4px;font-size:9.6pt;vertical-align:top}";
-    $tile=fn($v,$l,$s='')=>'<td style="width:25%;padding:4px"><div class="tile"><div class="l">'.e($l).'</div><div class="v">'.$v.'</div><div class="s">'.($s?:'&nbsp;').'</div></div></td>';
-    $o='<!doctype html><html><head><meta charset="utf-8"><style>'.$css.'</style></head><body>';
-    $o.='<div id="hd"><table width="100%"><tr><td>'.e($S('company_name')).'</td><td style="text-align:right">Confidential · prepared for '.e($lead['name']).'</td></tr></table></div><div id="ft">'.e($S('company_name')).' &nbsp;·&nbsp; '.e($S('company_phone')).' &nbsp;·&nbsp; '.e($S('company_email')).' &nbsp;·&nbsp; '.e(preg_replace('~^https?://|/$~','',$S('company_website'))).'</div>';
-    // Cover
-    $o.='<div class="cover"><div class="cv">'.($logo?'<img class="lg" src="'.$logo.'">':'<h2 style="color:#fff">'.e($S('company_name')).'</h2>').'<div class="k">Free Digital Growth Audit · '.date('F Y').'</div><h1>'.e($title).'</h1><div class="for">Prepared for '.e($lead['name']).'</div><div class="meta">'.e(trim($lead['category'].($lead['city']?' · '.$lead['city']:''),' ·')).'<br>'.e($lead['address']).($lead['website']?'<br>'.e($lead['website']):'').'</div><div class="art"><img src="'.self::art('cover',$pid,$pri,$acc).'"></div></div><div class="cvf"><b style="color:'.$acc.'">'.e($S('company_name')).'</b><br>'.e($S('company_address')).'<br>'.e($S('company_phone')).' · '.e($S('company_email')).' · '.e($S('company_website')).'</div><div class="cvb"></div></div><div class="pb"></div>';
-    // Snapshot
-    $o.='<div class="kick">Snapshot</div><h2>Your Digital Health Score</h2><div class="bar"></div>';
-    $o.='<table width="100%"><tr><td style="width:33%;text-align:center"><img src="'.Charts::gauge($overall,'Overall').'" style="width:150px"></td>'.($hasWeb?'<td style="width:33%;text-align:center"><img src="'.Charts::gauge($ws,'Website').'" style="width:150px"></td>':'<td style="width:33%;text-align:center;vertical-align:middle"><div class="tile" style="text-align:center;border-color:#fecaca;background:#fff5f5"><div class="v" style="color:#b91c1c">No website</div><div class="s">Customers cannot learn more or enquire online</div></div></td>').'<td style="width:33%;text-align:center"><img src="'.Charts::gauge($ms,'Google Maps').'" style="width:150px"></td></tr></table>';
-    $o.='<table width="100%" style="margin-top:6px"><tr>'.$tile(($lead['rating']?e($lead['rating']).' ★':'—'),'Google rating',!empty($mm['competitor_avg_rating'])?'Competitors: '.$mm['competitor_avg_rating'].' ★':'').$tile((int)$lead['reviews'],'Reviews',!empty($mm['competitor_avg_reviews'])?'Competitors avg: '.$mm['competitor_avg_reviews']:'').$tile($lead['position']?'#'.(int)$lead['position']:'—','Maps position',$lead['position']&&$lead['position']>3?'Outside the top 3':'').$tile($cnt['pass'].'/'.count($checks),'Checks passed',$cnt['fail'].' problems found').'</tr></table>';
+    $mm=$a['map']['meta']??[];
+        $css=self::fonts()."@page{size:A4 landscape;margin:0}*{box-sizing:border-box}body{margin:0;font-family:'$fb',Inter,sans-serif;color:#1E293B;font-size:10.5pt;line-height:1.5}h1,h2,h3,h4{font-family:'$fh',InterD,sans-serif;margin:0;color:#0F172A;letter-spacing:-.3px}p{margin:0 0 8px}"
+      .".pg{padding:34px 46px 10px;page-break-after:always}.pg.last{page-break-after:auto}"
+      .".kick{font-size:8.5pt;letter-spacing:2.5px;text-transform:uppercase;color:$A;font-weight:700}.pt{font-size:23pt;font-weight:800;margin:4px 0 0;line-height:1.15}.ps{color:#64748B;font-size:10.5pt;margin-top:6px}.bar{width:56px;height:4px;background:$A;border-radius:2px;margin:12px 0 18px}"
+      .".card{background:#fff;border:1px solid #E5E9F2;border-radius:16px;padding:18px 20px}.tint .card{border-color:#E8ECF4}.soft{background:$Pl;border:0}.lbl{font-size:8pt;letter-spacing:1.4px;text-transform:uppercase;color:#64748B;font-weight:700;margin-bottom:6px}.big{font-family:'$fh',InterD;font-size:26pt;font-weight:800;color:#0F172A;line-height:1.05}.sm{font-size:8.5pt;color:#64748B}.chip{display:inline-block;padding:3px 10px;border-radius:12px;font-size:8pt;font-weight:700}"
+      .".grid{width:100%;border-collapse:separate;border-spacing:0}.grid td{vertical-align:top}.gap{width:18px}.li{margin:0 0 7px;padding-left:0}.tbl{width:100%;border-collapse:collapse}.tbl th{text-align:left;font-size:8pt;letter-spacing:1px;text-transform:uppercase;color:#64748B;padding:7px 8px;border-bottom:2px solid #E5E9F2}.tbl td{padding:6px 8px;border-bottom:1px solid #EEF1F6;font-size:9.5pt}.me td{background:$Al;font-weight:700}"
+      .".hl{background:$Al;border-left:5px solid $A;border-radius:10px;padding:14px 18px;font-size:12pt;color:#0F172A;font-weight:600}.num{display:inline-block;width:26px;height:26px;border-radius:13px;background:$P;color:#fff;text-align:center;font-weight:700;font-size:10pt;line-height:26px}";
+    $page=function($kick,$title,$sub,$body,$art=null,$cls='')use($t){return '<div class="pg '.$cls.'"><table class="grid"><tr><td><div class="kick">'.$t($kick).'</div><div class="pt">'.$t($title).'</div>'.($sub?'<div class="ps">'.$t($sub).'</div>':'').'<div class="bar"></div></td>'.($art?'<td style="width:120px;text-align:right;vertical-align:top"><img src="'.$art.'" style="width:120px"></td>':'').'</tr></table>'.$body.'</div>';};
+    $tile=fn($label,$val,$sub='',$c='#0F172A')=>'<div class="card"><div class="lbl">'.e($label).'</div><div class="big" style="color:'.$c.'">'.$val.'</div>'.($sub?'<div class="sm" style="margin-top:4px">'.$sub.'</div>':'').'</div>';
+    $o='';
+    // 1 · Cover
+    $logo=self::logo();$cv=self::art('cover',$pid,$P,$A);
+    $chip=fn($l,$v)=>'<td style="padding:0 6px"><div style="background:#fff;border-radius:14px;padding:12px 10px;text-align:center"><img src="'.Charts::gauge($v,'',90).'" style="width:64px"><div class="sm" style="margin-top:2px;font-weight:600;color:#334155">'.$l.'</div></div></td>';
+    $o.='<div class="pg" style="padding:0"><table class="grid"><tr><td style="width:54%;height:690px;background:'.$P.';padding:52px 52px 40px;vertical-align:top">'.($logo?'<img src="'.$logo.'" style="height:78px">':'<div style="color:#fff;font-size:20pt;font-weight:800">'.e($S('company_name')).'</div>').'<div class="kick" style="margin-top:64px;letter-spacing:3.5px">Digital growth review · '.date('F Y').'</div><div style="font-family:'.$fh.',InterD;font-size:36pt;font-weight:800;color:#fff;line-height:1.08;margin-top:14px">'.$t($lead['name']).'</div><div style="color:'.$Am.';font-size:14pt;margin-top:14px;font-weight:600">'.($hasWeb?'Website & Google Maps review':'Google Maps review & website plan').'</div><div style="color:#CBD5E1;font-size:10pt;margin-top:22px;line-height:1.8">'.$t(implode(' · ',array_filter([$lead['category'],$lead['city']]))).'<br>'.$t($lead['address']).($lead['website']?'<br>'.$t($lead['website']):'').'</div><div style="margin-top:120px;border-top:1px solid #334155;padding-top:14px;color:#CBD5E1;font-size:9pt">Prepared by <b style="color:#fff">'.e($S('company_name')).'</b><br>'.e($S('company_phone')).' · '.e($S('company_email')).' · '.e(preg_replace('~^https?://|/$~','',$S('company_website'))).'</div></td><td style="background:'.$Al.';vertical-align:middle;text-align:center;padding:52px 30px 40px;height:690px"><img src="'.$cv.'" style="width:400px"><table style="margin:26px auto 0"><tr>'.$chip('Overall',$overall).($hasWeb?$chip('Website',$ws):'').$chip('Google Maps',$ms).'</tr></table></td></tr></table></div>';
+    // 2 · At a glance
+    $sum=implode('',array_map(fn($p)=>'<p style="font-size:11pt;color:#334155">'.$t($p).'</p>',array_filter(explode("\n\n",(string)($d['summary']??'')))));
+    $kp='<table class="grid" style="margin-top:16px"><tr><td style="width:25%;padding-right:10px">'.$tile('Google rating',$lead['rating']?e($lead['rating']).' ★':'—',!empty($mm['competitor_avg_rating'])?'Competitors '.$mm['competitor_avg_rating'].' ★':'').'</td><td style="width:25%;padding-right:10px">'.$tile('Reviews',(int)$lead['reviews'],!empty($mm['competitor_avg_reviews'])?'Competitor avg '.$mm['competitor_avg_reviews']:'').'</td><td style="width:25%;padding-right:10px">'.$tile('Maps position',$lead['position']?'#'.(int)$lead['position']:'—',$lead['keyword']?'for “'.$t(mb_strimwidth($lead['keyword'],0,30,'…')).'”':'').'</td><td style="width:25%">'.$tile('Checks passed',$cnt['pass'].'/'.count($checks),$cnt['fail'].' need attention').'</td></tr></table>';
+    $left='<div class="card" style="text-align:center;padding:22px 16px"><div class="lbl">Overall digital health</div><img src="'.Charts::gauge($overall,'out of 100',220).'" style="width:170px;margin:4px 0 8px"><table style="width:100%"><tr>'.($hasWeb?'<td style="text-align:center"><img src="'.Charts::gauge($ws,'',120).'" style="width:86px"><div class="sm" style="font-weight:600">Website</div></td>':'<td style="text-align:center;vertical-align:middle"><div class="chip" style="background:#FEE2E2;color:#B91C1C">No website</div></td>').'<td style="text-align:center"><img src="'.Charts::gauge($ms,'',120).'" style="width:86px"><div class="sm" style="font-weight:600">Google Maps</div></td></tr></table></div>';
+    $o.=$page('At a glance','Where '.$lead['name'].' stands today','',' <table class="grid"><tr><td style="width:290px">'.$left.'</td><td class="gap"></td><td>'.$sum.(!empty($d['headline'])?'<div class="hl" style="margin-top:6px">'.$t($d['headline']).'</div>':'').$kp.'</td></tr></table>',self::art('summary',$pid,$P,$A));
+    // 3 · Scores by area + strengths / gaps
     $cats=array_merge($hasWeb?($a['website']['cats']??[]):[],$a['map']['cats']??[]);
-    if($cats)$o.='<h3>Score by area</h3><img src="'.Charts::bars($cats).'" style="width:100%">';
-    $o.='<img src="'.Charts::strip($cnt['pass'],$cnt['warn'],$cnt['fail']).'" style="width:100%;margin-top:6px">';
-    $pri_=array_filter($checks,fn($c)=>$c['status']!=='pass');usort($pri_,fn($x,$y)=>[$y['status']==='fail',$y['w']]<=>[$x['status']==='fail',$x['w']]);
-    if($pri_){$o.='<h3>Top priorities</h3>';foreach(array_slice($pri_,0,6) as $c)$o.='<div class="pri'.($c['status']==='warn'?' w':'').'"><b>'.e($c['label']).'</b> <span class="sm">· '.e($c['src']).'</span><br><span style="font-size:9pt">'.e($c['detail']).'</span></div>';}
-    // Competitor benchmark
+    $gaps=array_values(array_filter($checks,fn($c)=>$c['status']==='fail'));usort($gaps,fn($x,$y)=>$y['w']<=>$x['w']);
+    $str='';foreach(array_slice((array)($d['strengths']??[]),0,4) as $s)$str.='<table style="margin-bottom:9px"><tr><td style="width:28px;vertical-align:top"><img src="'.Charts::icon('pass',20).'" style="width:18px"></td><td style="font-size:10pt">'.$t($s).'</td></tr></table>';
+    $gp='';foreach(array_slice($gaps,0,3) as $c)$gp.='<table style="margin-bottom:9px"><tr><td style="width:28px;vertical-align:top"><img src="'.Charts::icon('fail',20).'" style="width:18px"></td><td style="font-size:10pt"><b>'.$t($c['label']).'</b> <span class="sm">· '.e($c['src']).'</span><br><span class="sm" style="color:#475569">'.$t(mb_strimwidth($c['detail'],0,80,'…')).'</span></td></tr></table>';
+    $o.=$page('Scorecard','Scores by area','','<table class="grid"><tr><td style="width:52%"><div class="card"><img src="'.Charts::bars($cats,640).'" style="width:'.(count($cats)>9?78:90).'%"><table style="width:100%;margin-top:8px"><tr><td class="sm"><b style="color:#10B981">●</b> 75–100 strong &nbsp; <b style="color:#F59E0B">●</b> 50–74 needs work &nbsp; <b style="color:#EF4444">●</b> below 50 urgent</td><td style="text-align:right"><img src="'.Charts::donut($cnt['pass'],$cnt['warn'],$cnt['fail'],140).'" style="width:64px"></td></tr></table></div></td><td class="gap"></td><td><div class="card" style="margin-bottom:14px"><div class="lbl" style="color:#059669">What is already working</div>'.($str?:'<p class="sm">—</p>').'</div><div class="card"><div class="lbl" style="color:#DC2626">Biggest gaps</div>'.($gp?:'<p class="sm">No critical problems found.</p>').'</div></td></tr></table>',null,'tint');
+    // 4 · Market & customers
+    $m=$d['market']??[];$j=$d['journey']??[];$stats=array_slice((array)($m['stats']??[]),0,4);
+    $pal=['#3B82F6','#10B981','#F59E0B','#8B5CF6'];
+    $st='';foreach($stats as $i=>$s)$st.='<td style="width:'.floor(100/max(1,count($stats))).'%;padding-right:12px"><div class="card" style="border-top:4px solid '.$pal[$i%4].'"><div class="big" style="color:'.$pal[$i%4].'">'.$t($s['value']??'').'</div><div style="font-size:10pt;margin-top:6px;color:#334155">'.$t($s['label']??'').'</div><div class="sm" style="margin-top:6px">Source: '.$t($s['source']??'industry research').'</div></div></td>';
+    $fs=[];foreach([['Searches / month','monthly_searches','#1E3A8A'],['See your profile','profile_views','#2563EB'],['Call, visit or click','actions','#3B82F6'],['Become customers','customers','#60A5FA']] as [$lb,$k,$c])if($n($j[$k]??0)>0)$fs[]=[$lb,number_format($n($j[$k])),$c];
+    $o.=$page('Your market','How customers find and choose a '.mb_strtolower($lead['category']?:'business'),!empty($m['search_term'])?'Main search: “'.$m['search_term'].'”'.($n($m['monthly_searches']??0)?' · about '.number_format($n($m['monthly_searches'])).' searches a month (estimate)':''):'',($st?'<table class="grid"><tr>'.$st.'</tr></table>':'').'<table class="grid" style="margin-top:16px"><tr><td style="width:44%"><div class="card"><div class="lbl">Monthly customer journey (estimate)</div>'.($fs?'<img src="'.Charts::funnel($fs,520).'" style="width:86%;margin-left:7%">':'<p class="sm">Not enough data.</p>').(!empty($j['note'])?'<div class="sm" style="margin-top:6px">'.$t($j['note']).'</div>':'').'</div></td><td class="gap"></td><td><div class="card soft"><div class="lbl">What this means for you</div><p style="font-size:11pt">'.$t($m['insight']??'').'</p></div></td></tr></table>',self::art('journey',$pid,$P,$A),'tint');
+    // 5 · Competitors
     if($comp){
-      $rows=array_merge([[$lead['name'].' (you)',(int)$lead['reviews'],1]],array_map(fn($c)=>[$c['name'],(int)$c['reviews'],0],$comp));
-      usort($rows,fn($x,$y)=>$y[1]<=>$x[1]);
-      $rr=array_merge([[$lead['name'].' (you)',(float)$lead['rating'],1]],array_map(fn($c)=>[$c['name'],(float)$c['rating'],0],$comp));
-      $o.='<div class="np"></div><table width="100%" class="sec-h"><tr><td><div class="kick">Market position</div><h2>You vs. Your Competitors</h2><div class="bar"></div><p>How '.e($lead['name']).' compares with the businesses Google shows for <b>"'.e($lead['keyword']).'"</b>.</p></td><td style="width:170px;text-align:right"><img src="'.self::art('competitors',$pid,$pri,$acc).'"></td></tr></table>';
-      $o.='<div class="card"><h3 style="margin-top:0">Google reviews</h3><img src="'.Charts::compare($rows,'',520,$acc).'" style="width:100%"></div><div class="card"><h3 style="margin-top:0">Average rating</h3><img src="'.Charts::compare($rr,' ★',520,$acc).'" style="width:100%"></div>';
-      $tb='<tr style="background:'.$al.'"><td><b>#'.(int)$lead['position'].'</b></td><td><b>'.e($lead['name']).' (you)</b></td><td>'.($lead['rating']?e($lead['rating']).' ★':'—').'</td><td>'.(int)$lead['reviews'].'</td><td>'.($lead['website']?'Yes':'<b style="color:#b91c1c">No</b>').'</td></tr>';
-      foreach($comp as $c)$tb.='<tr><td>#'.(int)$c['position'].'</td><td>'.e($c['name']).'</td><td>'.($c['rating']?e($c['rating']).' ★':'—').'</td><td>'.(int)$c['reviews'].'</td><td>'.($c['website']?'Yes':'No').'</td></tr>';
-      $o.='<table class="t"><thead><tr><th>Rank</th><th>Business</th><th>Rating</th><th>Reviews</th><th>Website</th></tr></thead><tbody>'.$tb.'</tbody></table>';}
-    // AI narrative, split by section with illustrations
-    $parts=preg_split('~(<h2>.*?</h2>)~is',$body,-1,PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY);
-    $o.='<div class="np"></div>';$first=true;$used=[];
-    for($i=0;$i<count($parts);$i++){
-      $pt=$parts[$i];
-      if(!preg_match('~^<h2>(.*?)</h2>$~is',$pt,$hm)){$o.='<div>'.self::tables($pt).'</div>';continue;}
-      $h=html_entity_decode(strip_tags($hm[1]),ENT_QUOTES,'UTF-8');$key=Illus::forHeading($h);$sec=self::tables($parts[$i+1]??'');$i++;
-      $big=in_array($key,['website','maps','plan','why'],true)&&!$first;
-      $img=$key&&!isset($used[$key])?'<td style="width:160px;text-align:right"><img src="'.self::art($key,$pid,$pri,$acc).'"></td>':'';if($key)$used[$key]=1;
-      $o.=($big?'<div class="np"></div>':'<div style="height:14px"></div>').'<table width="100%" class="sec-h"><tr><td><div class="kick">'.e(self::kicker($key)).'</div><h2>'.e($h).'</h2><div class="bar"></div></td>'.$img.'</tr></table>'.$sec;
-      if($key==='growth'&&$data)$o.=self::roiBlock($data,$hasWeb,$cur,$acc,$pri);
-      $first=false;}
-    // Detailed checks
-    $o.='<div class="np"></div><div class="kick">Appendix</div><h2>Detailed Audit Checklist</h2><div class="bar"></div><p class="sm">Every check we ran, grouped by area. ✔ = good · ! = needs work · ✘ = problem.</p>';
-    $ic=['pass'=>['✔','#15803d'],'warn'=>['!','#b45309'],'fail'=>['✘','#b91c1c']];
-    foreach(['Google Maps'=>$a['map']??null,'Website'=>$hasWeb?($a['website']??null):null] as $src=>$au){
-      if(!$au)continue;
-      $o.='<h3>'.$src.' · '.(int)$au['score'].'/100</h3>';
-      $by=[];foreach($au['checks'] as $c)$by[$c['cat']??'Other'][]=$c;
-      foreach($by as $cat=>$list){
-        $sc=$au['cats'][$cat]??null;
-        $o.='<div class="cat">'.e($cat).($sc!==null?' <span class="chip" style="background:'.Illus::tint(Charts::col($sc),.82).';color:'.self::col($sc).'">'.$sc.'/100</span>':'').'</div><table width="100%" class="ck">';
-        usort($list,fn($x,$y)=>['fail'=>0,'warn'=>1,'pass'=>2][$x['status']]<=>['fail'=>0,'warn'=>1,'pass'=>2][$y['status']]);
-        foreach($list as $c)$o.='<tr><td class="ic" style="color:'.$ic[$c['status']][1].'">'.$ic[$c['status']][0].'</td><td><b>'.e($c['label']).'</b><br><span class="sm">'.e($c['detail']).'</span></td></tr>';
-        $o.='</table>';}}
-    // About us + CTA
-    $svc='';foreach(array_filter(array_map('trim',explode("\n",$S('services')))) as $s)$svc.='<tr><td style="width:18px;color:'.$acc.';font-weight:bold">✔</td><td>'.e($s).'</td></tr>';
-    $o.='<div class="np"></div><table width="100%" class="sec-h"><tr><td><div class="kick">About us</div><h2>'.e($S('company_name')).'</h2><div class="bar"></div><p>'.nl2br(e($S('company_about'))).'</p></td><td style="width:170px;text-align:right"><img src="'.self::art('why',$pid,$pri,$acc).'"></td></tr></table>';
-    $o.='<div class="card soft"><h3 style="margin-top:0">What we do</h3><table class="svc">'.$svc.'</table></div>';
-    $o.='<div class="cta"><table width="100%"><tr><td><h2>Ready to get more customers from Google?</h2><p style="margin-top:10px">Reply to our message or call <b>'.e($S('company_phone')).'</b> to book a free 20-minute strategy call. We will walk you through this report and show exactly how to fix the gaps.</p><p>Email: <b>'.e($S('company_email')).'</b><br>Web: '.e($S('company_website')).'</p></td><td style="width:170px;text-align:right"><img src="'.self::art('cta',$pid,$pri,$acc).'" style="width:160px"></td></tr></table></div>';
-    $o.='<p class="sm" style="margin-top:16px">This report was prepared on '.date('d M Y').' using live checks of the public website and Google Maps listing. Figures marked as estimates are based on typical industry benchmarks and are indicative only.</p>';
-    return $o.'</body></html>';}
-  private static function kicker($k){return ['summary'=>'Overview','journey'=>'Customer journey','website'=>'Website audit','maps'=>'Local search','competitors'=>'Competition','growth'=>'Opportunity','plan'=>'Roadmap','tips'=>'Do it yourself','why'=>'Our approach','cta'=>"Let's talk"][$k]??'Insight';}
-  private static function tables($h){return str_replace('<table>','<table class="t">',$h);}
-  private static function roiBlock($d,$hasWeb,$cur,$acc,$pri){
-    $cv=(float)($d['customer_value']??0);$ex=(float)($d['extra_enquiries_month']??0);$cr=(float)($d['conversion_rate']??0);$be=(int)($d['break_even_customers']??0);$ms=(int)($d['monthly_searches']??0);
-    $fee=(float)setting('yearly_fee','0')+($hasWeb?0:(float)setting('website_fee','0'));
-    if($cv<=0)return '';
-    if($cr>1)$cr/=100;
-    $cust=$ex>0?round($ex*12*($cr>0?$cr:.25)):0;$ret=$cust*$cv;
-    $f=fn($n)=>$cur.number_format($n);
-    $o='<div class="card soft"><table width="100%"><tr>'.($ms?'<td style="text-align:center"><div class="tile"><div class="l">Est. monthly searches</div><div class="v">'.number_format($ms).'</div></div></td>':'').'<td style="text-align:center"><div class="tile"><div class="l">Value of 1 customer</div><div class="v">'.$f($cv).'</div></div></td><td style="text-align:center"><div class="tile"><div class="l">Break-even</div><div class="v">'.($be?:ceil($fee/$cv)).' customers</div></div></td>'.($ex?'<td style="text-align:center"><div class="tile"><div class="l">Extra enquiries / month</div><div class="v">+'.(int)$ex.'</div></div></td>':'').'</tr></table>';
-    if($ret>0)$o.='<img src="'.Charts::roi([['Your investment / yr',$fee,'#94A3B8',$f($fee)],['Potential revenue / yr',$ret,$acc,$f($ret)]]).'" style="width:100%;margin-top:8px"><p class="sm">Potential revenue = '.(int)$ex.' extra enquiries × 12 months × '.round(($cr>0?$cr:.25)*100).'% conversion × '.$f($cv).' per customer (conservative estimate).</p>';
-    return $o.'</div>';}
+      $rv=array_merge([[$lead['name'].' (you)',(int)$lead['reviews'],1]],array_map(fn($c)=>[$c['name'],(int)$c['reviews'],0],$comp));usort($rv,fn($x,$y)=>$y[1]<=>$x[1]);
+      $rt=array_merge([[$lead['name'].' (you)',(float)$lead['rating'],1]],array_map(fn($c)=>[$c['name'],(float)$c['rating'],0],$comp));usort($rt,fn($x,$y)=>$y[1]<=>$x[1]);
+      $tb='<tr class="me"><td>#'.(int)$lead['position'].'</td><td>'.$t($lead['name']).' (you)</td><td>'.($lead['rating']?e($lead['rating']).' ★':'—').'</td><td>'.(int)$lead['reviews'].'</td><td>'.($lead['website']?'Yes':'No').'</td></tr>';
+      foreach($comp as $c)$tb.='<tr><td>#'.(int)$c['position'].'</td><td>'.$t($c['name']).'</td><td>'.($c['rating']?e($c['rating']).' ★':'—').'</td><td>'.(int)$c['reviews'].'</td><td>'.($c['website']?'Yes':'No').'</td></tr>';
+      $o.=$page('Competition','You and the businesses ranking around you','Google Maps results for “'.$lead['keyword'].'”','<table class="grid"><tr><td style="width:46%"><div class="card" style="margin-bottom:12px"><div class="lbl">Google reviews</div><img src="'.Charts::compare($rv,'',560,$A).'" style="width:100%"></div><div class="card"><div class="lbl">Average rating</div><img src="'.Charts::compare($rt,' ★',560,$A).'" style="width:100%"></div></td><td class="gap"></td><td><div class="card"><table class="tbl"><thead><tr><th>Rank</th><th>Business</th><th>Rating</th><th>Reviews</th><th>Website</th></tr></thead><tbody>'.$tb.'</tbody></table></div>'.(!empty($d['competitors_insight'])?'<div class="hl" style="margin-top:14px;font-weight:500;font-size:10.5pt">'.$t($d['competitors_insight']).'</div>':'').'</td></tr></table>',self::art('competitors',$pid,$P,$A));}
+    // 6+ · Findings (4 per page)
+    $f=array_slice((array)($d['findings']??[]),0,10);
+    foreach(array_chunk($f,4) as $pi=>$chunk){
+      $cell=function($x)use($t){[$c,$ic]=self::AREA[$x['area']??'']??['#64748B','content'];$imp=strtolower($x['impact']??'');$ic2=['high'=>['#FEE2E2','#B91C1C'],'medium'=>['#FEF3C7','#B45309'],'low'=>['#DCFCE7','#15803D']][$imp]??['#F1F5F9','#475569'];
+        return '<div class="card" style="height:250px;padding:14px 18px;border-top:5px solid '.$c.'"><table style="width:100%"><tr><td style="width:40px"><div style="width:34px;height:34px;border-radius:10px;background:'.$c.';text-align:center;padding-top:6px"><img src="'.Charts::glyph($ic,'#FFFFFF',22).'" style="width:20px"></div></td><td><div class="lbl" style="margin:0;color:'.$c.'">'.$t($x['area']??'').'</div><div style="font-family:InterD;font-weight:700;font-size:12.5pt;color:#0F172A">'.$t($x['title']??'').'</div></td></tr></table><div style="margin-top:10px;font-size:9.5pt"><b style="color:#0F172A">What we found.</b> '.$t($x['found']??'').'</div><div style="margin-top:6px;font-size:9.5pt"><b style="color:#0F172A">Why it matters.</b> '.$t($x['why']??'').'</div><div style="margin-top:6px;font-size:9.5pt;background:#F8FAFC;border-radius:8px;padding:7px 9px"><b style="color:'.$c.'">What to do.</b> '.$t($x['fix']??'').'</div><div style="margin-top:8px"><span class="chip" style="background:'.$ic2[0].';color:'.$ic2[1].'">Impact: '.$t($x['impact']??'').'</span> <span class="chip" style="background:#EEF2FF;color:#4338CA">Effort: '.$t($x['effort']??'').'</span></div></div>';};
+      $rows='';foreach(array_chunk($chunk,2) as $r)$rows.='<tr><td style="width:50%;padding:0 9px 12px 0">'.$cell($r[0]).'</td><td style="width:50%;padding:0 0 12px 9px">'.(isset($r[1])?$cell($r[1]):'').'</td></tr>';
+      $o.=$page('Key findings'.($pi?' (continued)':''),$pi?'More opportunities':'What we found – and what to do about it','',' <table class="grid">'.$rows.'</table>',$pi?null:self::art($hasWeb?'website':'maps',$pid,$P,$A),'tint');}
+    // Opportunity & outcomes
+    $op=$d['opportunity']??[];$cv=$n($op['customer_value']??0);$ce=$n($op['current_enquiries_month']??0);$pe=$n($op['potential_enquiries_month']??0);$cr=$n($op['conversion_rate']??0);if($cr>1)$cr/=100;if($cr<=0)$cr=.2;
+    $fee=(float)$S('yearly_fee','0')+($hasWeb?0:(float)$S('website_fee','0'));$extra=max(0,$pe-$ce);$rev=round($extra*12*$cr*$cv);
+    $oc='';foreach(array_slice((array)($d['outcomes']??[]),0,4) as $x)$oc.='<tr><td><b>'.$t($x['metric']??'').'</b></td><td>'.$t($x['today']??'').'</td><td style="color:#059669;font-weight:700">'.$t($x['target']??'').'</td><td class="sm">'.$t($x['timeframe']??'').'</td></tr>';
+    $ch1=$pe>0?'<div class="card" style="margin-bottom:12px"><div class="lbl">Enquiries per month</div><img src="'.Charts::columns([['Today (est.)',$ce,'#CBD5E1',number_format($ce)],['Achievable',$pe,'#10B981',number_format($pe)]],460,220).'" style="width:100%"></div>':'';
+    $ch2=$rev>0&&$fee>0?'<div class="card"><div class="lbl">Yearly investment vs. potential new revenue</div><img src="'.Charts::columns([['Investment',$fee,'#94A3B8',$money($fee)],['Potential revenue',$rev,$A,$money($rev)]],460,220).'" style="width:100%"><div class="sm">'.(int)$extra.' extra enquiries × 12 months × '.round($cr*100).'% become customers × '.$money($cv).' (estimate).</div></div>':'';
+    $o.=$page('Opportunity','What could realistically change',!empty($op['assumptions'])?$op['assumptions']:'',' <table class="grid"><tr><td style="width:40%">'.$ch1.$ch2.'</td><td class="gap"></td><td>'.($oc?'<div class="card" style="margin-bottom:14px"><div class="lbl">Results to aim for</div><table class="tbl"><thead><tr><th>Metric</th><th>Today</th><th>Target</th><th>When</th></tr></thead><tbody>'.$oc.'</tbody></table></div>':'').($cv>0?'<table class="grid"><tr><td style="width:50%;padding-right:8px">'.$tile('Value of one customer',$money($cv),'estimate for this business type','#0F172A').'</td><td style="padding-left:8px">'.$tile('Customers to cover the cost',$fee>0?(string)max(1,(int)ceil($fee/$cv)):'—','per year','#059669').'</td></tr></table>':'').'</td></tr></table>',self::art('growth',$pid,$P,$A),'tint');
+    // Roadmap
+    $ph=array_slice((array)($d['plan']??[]),0,4);
+    if($ph){$cols='';foreach($ph as $i=>$x){$c=Charts::PAL[$i%8];$acts='';foreach(array_slice((array)($x['actions']??[]),0,4) as $ac)$acts.='<table style="margin-bottom:6px"><tr><td style="width:14px;vertical-align:top;color:'.$c.';font-weight:700">•</td><td style="font-size:9.5pt">'.$t($ac).'</td></tr></table>';
+      $cols.='<td style="width:'.floor(100/count($ph)).'%;padding:0 7px;vertical-align:top"><div style="height:6px;background:'.$c.';border-radius:3px;margin-bottom:14px"></div><div style="width:34px;height:34px;border-radius:17px;background:'.$c.';color:#fff;font-weight:800;text-align:center;line-height:34px;font-size:13pt">'.($i+1).'</div><div class="lbl" style="margin-top:10px;color:'.$c.'">'.$t($x['phase']??'').'</div><div style="font-family:InterD;font-weight:700;font-size:12.5pt;margin-bottom:10px;color:#0F172A">'.$t($x['title']??'').'</div><div class="card" style="height:230px">'.$acts.'<div style="margin-top:10px;background:#F0FDF4;border-radius:8px;padding:8px 10px;font-size:9.3pt"><b style="color:#059669">Result:</b> '.$t($x['result']??'').'</div></div></td>';}
+      $o.=$page('Roadmap','A practical 90-day plan','Step by step, starting with the changes that bring results fastest.','<table class="grid"><tr>'.$cols.'</tr></table>',self::art('plan',$pid,$P,$A));}
+    // Quick wins + how we help
+    $qw='';foreach(array_slice((array)($d['quick_wins']??[]),0,5) as $i=>$x)$qw.='<table style="margin-bottom:11px;width:100%"><tr><td style="width:38px;vertical-align:top"><span class="num" style="background:'.Charts::PAL[$i%8].'">'.($i+1).'</span></td><td><b style="color:#0F172A">'.$t($x['title']??'').'</b><br><span style="font-size:9.5pt;color:#475569">'.$t($x['how']??'').'</span></td></tr></table>';
+    $hw='';foreach(array_slice((array)($d['how_we_help']??[]),0,4) as $i=>$x)$hw.='<div class="card" style="margin-bottom:10px;padding:13px 16px;border-left:4px solid '.Charts::PAL[($i+3)%8].'"><b style="color:#0F172A;font-size:11pt">'.$t($x['service']??'').'</b><div style="font-size:9.5pt;margin-top:3px">'.$t($x['what']??'').'</div><div class="sm" style="margin-top:3px;color:#059669"><b>Result:</b> '.$t($x['result']??'').'</div></div>';
+    $o.=$page('Next steps','Quick wins you can do yourself – and where we can help','',' <table class="grid"><tr><td style="width:50%"><div class="card"><div class="lbl">Do it yourself this week</div>'.$qw.'</div></td><td class="gap"></td><td>'.$hw.'</td></tr></table>',self::art('tips',$pid,$P,$A),'tint');
+    // Appendix checklist (2 columns, 13 rows each)
+    $rows=[];foreach($checks as $c)$rows[]=$c;usort($rows,fn($x,$y)=>[['fail'=>0,'warn'=>1,'pass'=>2][$x['status']],$x['src']]<=>[['fail'=>0,'warn'=>1,'pass'=>2][$y['status']],$y['src']]);
+    $col=function($list)use($t){$h='<table class="tbl">';foreach($list as $c)$h.='<tr><td style="width:30px;vertical-align:top;padding-top:9px"><img src="'.Charts::icon($c['status'],20).'" style="width:17px"></td><td><b style="color:#0F172A">'.$t($c['label']).'</b> <span class="sm">· '.$t($c['src'].' / '.($c['cat']??'')).'</span><br><span class="sm" style="color:#475569">'.$t(mb_strimwidth($c['detail'],0,110,'…')).'</span></td></tr>';return $h.'</table>';};
+    foreach(array_chunk($rows,20) as $i=>$chunk){$h=array_chunk($chunk,10);
+      $o.=$page('Appendix','Every check we ran'.($i?' (continued)':''),$i?'':count($checks).' checks · '.$cnt['pass'].' passed · '.$cnt['warn'].' need work · '.$cnt['fail'].' problems','<table class="grid"><tr><td style="width:50%;padding-right:10px">'.$col($h[0]).'</td><td style="padding-left:10px">'.(isset($h[1])?$col($h[1]):'').'</td></tr></table>');}
+    // Closing
+    $svc='';foreach(array_slice(array_filter(array_map('trim',explode("\n",$S('services')))),0,5) as $s)$svc.='<table style="margin-bottom:7px"><tr><td style="width:24px"><img src="'.Charts::icon('pass',18).'" style="width:15px"></td><td style="font-size:10pt">'.$t($s).'</td></tr></table>';
+    $o.='<div class="pg last" style="padding:0"><table class="grid"><tr><td style="width:56%;height:696px;padding:44px 50px;vertical-align:top"><div class="kick">Thank you</div><div class="pt" style="font-size:28pt;margin-top:8px">We hope this review is useful</div><div class="bar"></div><p style="font-size:11.5pt;color:#334155">'.$t($d['closing']??'').'</p><p style="font-size:10.5pt;color:#334155;margin-top:14px">'.$t($S('company_about')).'</p><div class="card soft" style="margin-top:16px"><div class="lbl">What we do</div>'.$svc.'</div><div class="sm" style="margin-top:18px">Prepared on '.date('d M Y').' from live checks of the public website and Google listing. Market figures and projections are estimates based on industry sources and are indicative only.</div></td><td style="background:'.$P.';vertical-align:middle;text-align:center;padding:44px 48px;height:696px">'.'<img src="'.self::art('cta',$pid,$P,$A).'" style="width:270px"><div style="color:#fff;font-family:InterD;font-weight:800;font-size:18pt;margin-top:18px">Happy to talk it through</div><div style="color:#CBD5E1;font-size:10.5pt;margin-top:8px">A free 20-minute call – no obligation.</div><div style="background:#fff;border-radius:14px;padding:16px;margin-top:22px;text-align:left;font-size:10.5pt;color:#0F172A">'.($logo?'<div style="background:'.$P.';border-radius:10px;padding:8px;display:inline-block;margin-bottom:8px"><img src="'.$logo.'" style="height:40px"></div><br>':'').'<b>'.e($S('company_name')).'</b><br>'.e($S('company_phone')).'<br>'.e($S('company_email')).'<br>'.e(preg_replace('~^https?://|/$~','',$S('company_website'))).'</div></td></tr></table></div>';
+    return '<!doctype html><html><head><meta charset="utf-8"><style>'.$css.'</style></head><body>'.$o.'</body></html>';}
+  // Example content used by "Preview design" (no AI cost)
+  static function sample(){return ['summary'=>"Your business is well known locally and your Google rating is strong, which is a great foundation. Most new customers, however, now compare two or three options on Google Maps before calling, and several smaller gaps make it easier for them to pick a competitor.\n\nThe good news: the biggest gaps are in your Google profile and in how easy it is to contact you from your website – both can be improved within weeks.",'headline'=>'Closing the review gap and making it one tap to call could add 10–15 enquiries a month.','strengths'=>['Excellent 4.9★ average rating','Secure, mobile-friendly website','Ranking in the top 3 for the main search','Clear contact details on the website'],'market'=>['search_term'=>'digital marketing agency in Pune','monthly_searches'=>1900,'insight'=>'Business owners in Pune usually shortlist agencies from Google Maps and then check reviews and past work on the website before calling. Proof of results and quick responses matter more than price at the shortlist stage.','stats'=>[['value'=>'87%','label'=>'of consumers used Google to evaluate local businesses','source'=>'BrightLocal, 2023'],['value'=>'76%','label'=>'of people who search on a phone for something nearby visit a business within a day','source'=>'Google/Ipsos, 2016'],['value'=>'3×','label'=>'more likely to be considered when a profile is complete','source'=>'Google Business Profile Help'],['value'=>'53%','label'=>'of mobile visits are abandoned if a page takes over 3 seconds to load','source'=>'Google, 2016']]],'journey'=>['monthly_searches'=>1900,'profile_views'=>650,'actions'=>95,'customers'=>9,'note'=>'Estimated from typical local-pack click shares for a #1–3 position and industry conversion rates.'],'competitors_insight'=>'You lead on rating, but the two competitors just below you are collecting reviews faster and have more photos, which helps them appear for more searches.','findings'=>[['area'=>'Google Maps','title'=>'Profile is missing photos and hours','found'=>'Only 3 photos and no opening hours on your Google profile.','why'=>'Profiles with photos and hours get more calls and appear in “open now” searches.','fix'=>'Add 15–20 recent photos and set regular and holiday hours.','impact'=>'High','effort'=>'Low'],['area'=>'Reviews','title'=>'Review growth has slowed','found'=>'120 reviews; competitors average 26 but are adding them faster.','why'=>'Fresh reviews are a strong ranking and trust signal.','fix'=>'Ask every happy client with a short WhatsApp link after each project.','impact'=>'High','effort'=>'Low'],['area'=>'Conversion','title'=>'No analytics on the website','found'=>'Google Analytics is not installed.','why'=>'You cannot see which pages or channels bring enquiries.','fix'=>'Install GA4 with call and form tracking.','impact'=>'Medium','effort'=>'Low'],['area'=>'Speed','title'=>'Homepage loads slowly on mobile','found'=>'The homepage HTML alone took 2.9 seconds.','why'=>'Visitors leave slow pages before they enquire.','fix'=>'Compress images and defer non-essential scripts.','impact'=>'Medium','effort'=>'Medium'],['area'=>'Content','title'=>'Few dedicated service pages','found'=>'Only one service page is linked from the homepage.','why'=>'Each service needs its own page to appear for its searches.','fix'=>'Create one page per core service with local examples.','impact'=>'Medium','effort'=>'Medium']],'opportunity'=>['customer_value'=>60000,'current_enquiries_month'=>12,'potential_enquiries_month'=>24,'conversion_rate'=>20,'assumptions'=>'Based on your current position, typical local-pack click shares and a conservative 20% enquiry-to-client rate.'],'outcomes'=>[['metric'=>'Calls from Google Maps','today'=>'~12 / month','target'=>'20–25 / month','timeframe'=>'6 months'],['metric'=>'Google reviews','today'=>'120','target'=>'170+','timeframe'=>'6 months'],['metric'=>'Website enquiries','today'=>'Not tracked','target'=>'Tracked, +30%','timeframe'=>'3 months']],'plan'=>[['phase'=>'Weeks 1–2','title'=>'Fix the basics','actions'=>['Complete Google profile','Install tracking','Click-to-call & WhatsApp'],'result'=>'Every enquiry is measurable'],['phase'=>'Weeks 3–4','title'=>'Build trust','actions'=>['Review request system','Add case studies'],'result'=>'Steady flow of new reviews'],['phase'=>'Weeks 5–8','title'=>'Grow visibility','actions'=>['Service pages','Local citations'],'result'=>'Appear for more searches'],['phase'=>'Weeks 9–12','title'=>'Optimise','actions'=>['Speed improvements','Monthly reporting'],'result'=>'More enquiries per visitor']],'quick_wins'=>[['title'=>'Add 10 new photos','how'=>'Office, team and recent work – takes 15 minutes.'],['title'=>'Reply to every review','how'=>'A short personal reply shows you care.'],['title'=>'Set holiday hours','how'=>'Avoid losing “open now” searches.'],['title'=>'Ask 5 clients for reviews','how'=>'Send your review link on WhatsApp today.'],['title'=>'Make your number tappable','how'=>'Use a tel: link in the header.']],'how_we_help'=>[['service'=>'Google Business Profile management','what'=>'Weekly posts, photos and review replies.','result'=>'More profile views and calls'],['service'=>'Local SEO','what'=>'Service pages and local citations for Pune.','result'=>'Visible for more searches'],['service'=>'Conversion & tracking','what'=>'Analytics, call tracking and faster pages.','result'=>'More enquiries from the same traffic']],'closing'=>'Thank you for taking the time to read this. Even if you only act on the quick wins, you should see a difference within a few weeks – and we are always happy to answer questions.'];}
   static function pdf($html){
     $o=new Options();
     $o->set(['isRemoteEnabled'=>false,'isHtml5ParserEnabled'=>true,'chroot'=>[ROOT],'fontDir'=>STORAGE.'/fonts','fontCache'=>STORAGE.'/fonts','tempDir'=>STORAGE.'/tmp','defaultFont'=>'DejaVu Sans','dpi'=>96]);
     $d=new Dompdf($o);
-    $d->setPaper('A4');
+    $d->setPaper('A4','landscape');
     $d->loadHtml($html,'UTF-8');
     $d->render();
-    $c=$d->getCanvas();
-    $c->page_script(function($n,$t,$canvas,$fm){if($n>1)$canvas->text($canvas->get_width()-92,$canvas->get_height()-38,'Page '.$n.' of '.$t,$fm->getFont('DejaVu Sans'),7.5,[.6,.6,.6]);});
     return $d->output();}}

@@ -20,14 +20,28 @@ Built for **shared hosting** (cPanel / Hostinger / any PHP host): plain PHP 8 + 
 - **Appointments** – public booking page (general and personal links), calendar, confirmations, 1-hour reminders.
 - **Journey** – a complete timeline per lead: found, audited, sent, opened, viewed, replied, calls, bookings, automation steps, notes.
 
-**Platform** – AI Connection (Claude, ChatGPT, OpenRouter, Gemini, Groq, DeepSeek, custom), automatic background scheduler (no cron needed), one-click GitHub updates, team users, configurable currency (default INR).
+**Platform**
+- **Modules** – CRM is always on; **Prospecting** can be switched off by a super admin (its menu, pages and settings are hidden, data is kept). Settings are grouped by module: General, Messaging, Prospecting, CRM, System.
+- **Roles** – *Super admin* (everything incl. modules and other super admins), *Admin / Manager* (all leads, prospecting, automations, templates, settings, team), *Sales person* (own + unassigned leads, add leads, notes, status, appointments). Manage people in **Team & Roles**.
+- **API Usage & Costs** – counts every AI (tokens per model), Google Places, SerpAPI, PageSpeed, WhatsApp, AI voice (Sarvam, Bland, Vapi, Retell), email and Google Calendar call. Shows free limits, month-end projection, estimated cost (USD and your currency) and warns before you go over a free tier. Prices are editable.
+- **Google Calendar (optional)** – bookings stay in Setu; when connected, busy times in Google block slots, each booking becomes a calendar event with a Meet link and invite, cancellations remove it.
+- **Email** – PHP mail by default (works on shared hosting); SMTP optional for better delivery.
+- AI Connection (Claude, ChatGPT, OpenRouter, Gemini, Groq, DeepSeek, custom), automatic background scheduler (no cron needed), one-click GitHub updates, configurable currency (default INR).
+
+## Lead capture – which method?
+Use **one** method per form:
+- **Elementor / WordPress form plugins (recommended):** Form widget → *Actions After Submit* → **Webhook** → paste the source's Endpoint URL. Simple and "Advanced data" payloads both work.
+- **Any other form without a webhook option:** paste the source's script before `</body>`.
+- **No form yet:** paste the ready-made HTML form.
+Don't combine the webhook and the script for the same form – each enquiry would arrive twice (duplicates are merged by phone/email, but the activity doubles).
+Field mapping: common names (name, phone/mobile/whatsapp, email, company, city, service, budget, message) and your custom field keys are matched automatically; anything else goes to the enquiry notes. After the first submission every field appears under **Settings → CRM → Lead capture → Field mapping**, where you can send it to any field or ignore it.
 
 ## Install (shared hosting)
 1. Upload the files to `public_html` or a sub-domain folder (Download ZIP from GitHub → File Manager → Extract), or use cPanel → Git Version Control.
 2. Create a MySQL database and user (cPanel → MySQL Database Wizard, ALL PRIVILEGES).
 3. Open `https://your-domain/install.php`, enter the DB details and create the admin login.
 4. Background jobs run automatically – no cron setup needed. Setu adds a server cron itself when the host allows it, otherwise its built-in scheduler keeps running and restarts on any visit. (Optional extra reliability: a cron job every minute with `php /path/to/cron.php`.)
-5. Connect AI (AI Connection tab), the Google Places / SerpAPI key, SMTP/IMAP and WhatsApp (Settings).
+5. Connect AI (AI Connection tab), the Google Places / SerpAPI key, email (PHP mail works out of the box; SMTP/IMAP optional) and WhatsApp (Settings). The installer's admin account is the **super admin**.
 
 Requirements: PHP 8.0+ with pdo_mysql, curl, mbstring, dom, gd, openssl, and zip (for updates). Also MySQL 5.7+ or MariaDB 10.3+, and HTTPS.
 
@@ -47,9 +61,10 @@ track.php        email open pixel                 webhook.php  WhatsApp Cloud AP
 hook.php         lead capture (forms/Meta/Google) callhook.php AI voice call results
 book.php         public booking page
 app/lib          DB, Settings, Maps, Scraper, Auditor, AI, Report, Charts, Illus, Mailer, WhatsApp, Queue, Outreach,
-                 CRM, Capture, Automation, Voice, Booking, Cron, Updater, Migrator, Seed
-app/pages        dashboard, scraper, campaign, prospects, leads, lead, appointments, automations, automation,
-                 templates, reports, settings, ai, updates, api, login
+                 CRM, Capture, Automation, Voice, Booking, GCal, Usage, Cron, Updater, Migrator, Seed
+app/pages        dashboard, scraper, campaign, prospects, leads, lead, lead_new, appointments, automations, automation,
+                 templates, reports, settings, ai, usage, team, user, account, updates, api, login
+gcal.php         Google Calendar connect (OAuth)
 app/views        layout + shared partials          app/migrations  database schema
 assets/          css, js, images, uploaded logo    storage/  reports, uploads, fonts, logs, backups (private)
 ```

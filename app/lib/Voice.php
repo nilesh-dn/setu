@@ -21,6 +21,7 @@ final class Voice{
     try{$ext=self::dial($p,$to,$task,$first,$hook,$vars,$l);}
     catch(Throwable $e){DB::update('calls',['status'=>'failed','summary'=>$e->getMessage()],'id=?',[$cid]);event($lid,'error','AI call failed: '.$e->getMessage(),'call');throw $e;}
     DB::update('calls',['ext_id'=>mb_substr((string)$ext,0,190),'status'=>'calling'],'id=?',[$cid]);
+    Usage::log('voice_'.$p,'call',1);
     event($lid,'call','AI voice call started to '.$to.' via '.self::providers()[$p][0],'call');
     return $cid;}
   static function call($lid,$p){self::start($lid,$p);}
@@ -76,6 +77,7 @@ final class Voice{
     $rec=self::find($d,['recording_url','recordingUrl','recording','stereoRecordingUrl']);
     $u=['status'=>mb_substr($status,0,20),'duration'=>$dur!==null?(int)$dur:null,'transcript'=>$tr?mb_substr((string)$tr,0,60000):null,'summary'=>$sum?mb_substr((string)$sum,0,4000):null,'recording'=>$rec?mb_substr((string)$rec,0,490):''];
     DB::update('calls',array_filter($u,fn($v)=>$v!==null&&$v!==''),'id=?',[$call['id']]);
+    if($dur&&!$call['duration'])Usage::log('voice_'.$call['provider'],'minutes',0,(int)$dur);
     event($call['lead_id'],'call','AI call '.$status.($dur?' · '.gmdate('i:s',(int)$dur):'').($sum?': '.mb_strimwidth((string)$sum,0,400,'…'):''),'call');
     if($tr&&preg_match('/\b(yes|sure|ok|okay|haan|ha|ji)\b.*\b(meeting|call|appointment|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday)\b/i',(string)$tr.' '.$sum))CRM::addTag($call['lead_id'],'call-interested');
     Automation::fire('call_completed',$call['lead_id']);}}

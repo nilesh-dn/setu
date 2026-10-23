@@ -10,6 +10,7 @@ final class Maps{
     if($next)$body['pageToken']=$next;
     $mask='places.id,places.displayName,places.formattedAddress,places.addressComponents,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.rating,places.userRatingCount,places.googleMapsUri,places.primaryTypeDisplayName,places.types,places.regularOpeningHours.weekdayDescriptions,places.businessStatus,places.location,places.photos.name,places.editorialSummary,nextPageToken';
     $r=http_json('https://places.googleapis.com/v1/places:searchText',['json'=>$body,'headers'=>['X-Goog-Api-Key: '.$key,'X-Goog-FieldMask: '.$mask],'timeout'=>40]);
+    Usage::log('google_places','text_search',1,0,0,null,$r['code']!==200);
     if($r['code']!==200)throw new Exception(self::gerr($r));
     $out=[];
     foreach($r['data']['places']??[] as $p){
@@ -36,7 +37,7 @@ final class Maps{
     if(!$key)return ['✕ No Google API key saved in Settings → Data Source.'];
     $out[]='Key in use: '.substr($key,0,6).'…'.substr($key,-4).' ('.strlen($key).' chars'.(preg_match('/\s/',$key)?', CONTAINS SPACES – re-paste it':'').')';
     foreach([['Basic search (IDs only)','places.id'],['Full search (name, phone, website, rating…)','places.id,places.displayName,places.nationalPhoneNumber,places.websiteUri,places.rating']] as [$label,$mask]){
-      $r=http_json('https://places.googleapis.com/v1/places:searchText',['json'=>['textQuery'=>'cafe in '.$city,'pageSize'=>3],'headers'=>['X-Goog-Api-Key: '.$key,'X-Goog-FieldMask: '.$mask],'timeout'=>30]);
+      $r=http_json('https://places.googleapis.com/v1/places:searchText',['json'=>['textQuery'=>'cafe in '.$city,'pageSize'=>3],'headers'=>['X-Goog-Api-Key: '.$key,'X-Goog-FieldMask: '.$mask],'timeout'=>30]);Usage::log('google_places','test',1,0,0,null,$r['code']!==200);
       $out[]=($r['code']===200?'✓ ':'✕ ').$label.': '.($r['code']===200?count($r['data']['places']??[]).' results':self::gerr($r));
       if($r['code']!==200)break;}
     return $out;}
@@ -45,6 +46,7 @@ final class Maps{
     if(!$key)throw new Exception('SerpAPI key missing. Add it in Settings → Data Source.');
     $start=(int)$next;
     $r=http_json('https://serpapi.com/search.json?'.http_build_query(['engine'=>'google_maps','type'=>'search','q'=>$q,'hl'=>setting('maps_language','en'),'gl'=>setting('maps_region','in'),'start'=>$start,'api_key'=>$key]),['timeout'=>60]);
+    Usage::log('serpapi','maps_search',1,0,0,null,$r['code']!==200);
     if($r['code']!==200||!empty($r['data']['error'])){
       if(!empty($r['data']['error'])&&stripos($r['data']['error'],"hasn't returned any results")!==false)return ['items'=>[],'next'=>null];
       throw new Exception('SerpAPI error: '.($r['data']['error']??$r['error']?:$r['code']));}

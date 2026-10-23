@@ -1,21 +1,27 @@
 <?php
 use PHPMailer\PHPMailer\PHPMailer;
 final class Mailer{
-  static function ready(){return setting('smtp_host')&&setting('smtp_user')&&setting('from_email',setting('smtp_user'));}
+  static function smtp(){return setting('mail_transport','php')==='smtp';}
+  // PHP mail() works out of the box on shared hosting; SMTP is optional for better delivery
+  static function ready(){return self::smtp()?setting('smtp_host')&&setting('smtp_user'):(function_exists('mail')&&self::from()!=='');}
+  static function from(){return setting('from_email',self::smtp()?setting('smtp_user'):setting('company_email'));}
   static function send($to,$subject,$html,$text,$files=[]){
     $m=new PHPMailer(true);
-    $m->isSMTP();
-    $m->Host=setting('smtp_host');$m->Port=(int)setting('smtp_port','465');
-    $m->SMTPAuth=true;$m->Username=setting('smtp_user');$m->Password=setting('smtp_pass');
-    $sec=setting('smtp_secure','ssl');$m->SMTPSecure=$sec==='none'?'':$sec;$m->SMTPAutoTLS=$sec!=='none';
+    if(self::smtp()){
+      $m->isSMTP();
+      $m->Host=setting('smtp_host');$m->Port=(int)setting('smtp_port','465');
+      $m->SMTPAuth=true;$m->Username=setting('smtp_user');$m->Password=setting('smtp_pass');
+      $sec=setting('smtp_secure','ssl');$m->SMTPSecure=$sec==='none'?'':$sec;$m->SMTPAutoTLS=$sec!=='none';}
+    else{$m->isMail();$m->Sender=self::from();}
     $m->CharSet='UTF-8';$m->Timeout=30;
-    $m->setFrom(setting('from_email',setting('smtp_user')),setting('from_name',setting('company_name')));
+    $m->setFrom(self::from(),setting('from_name',setting('company_name')));
     if($r=setting('reply_to'))$m->addReplyTo($r);
     if($b=setting('bcc_email'))$m->addBCC($b);
     $m->addAddress($to);
     $m->Subject=$subject;$m->isHTML(true);$m->Body=$html;$m->AltBody=$text;
     foreach($files as $name=>$path)if(is_file($path))$m->addAttachment($path,$name);
     $m->send();
+    Usage::log('email',$m->Mailer);
     return $m->getLastMessageID();}
   static function html($text,$pixel=''){
     $acc=setting('brand_accent','#B8860B');

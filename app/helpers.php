@@ -19,7 +19,22 @@ function csrf_check(){
   if(!hash_equals(csrf(),(string)$t)){http_response_code(419);exit('Session expired. Go back and refresh the page.');}}
 function is_post(){return ($_SERVER['REQUEST_METHOD']??'')==='POST';}
 function json_out($d,$code=200){http_response_code($code);header('Content-Type: application/json');echo json_encode($d,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;}
-function user(){static $u=false;if($u===false||($u&&($u['id']??0)!=($_SESSION['uid']??0)))$u=($_SESSION['uid']??null)?DB::row('SELECT id,name,email FROM users WHERE id=?',[$_SESSION['uid']]):null;return $u;}
+function user(){static $u=false;if($u===false||($u&&($u['id']??0)!=($_SESSION['uid']??0)))$u=($_SESSION['uid']??null)?DB::row('SELECT id,name,email,role,phone FROM users WHERE id=? AND active=1',[$_SESSION['uid']]):null;return $u;}
+// Roles: super (everything incl. modules), admin (manager – everything except modules & super users), sales (own + unassigned leads, appointments)
+function roles(){return ['super'=>['Super admin','purple','Full control: modules, all settings, every user and every lead.'],'admin'=>['Admin / Manager','blue','Runs the team: all leads, prospecting, automations, templates and settings. Cannot switch modules or manage super admins.'],'sales'=>['Sales person','green','Works their own leads and unassigned leads, books appointments, logs calls and notes.']];}
+function role(){return user()['role']??'sales';}
+function is_super(){return role()==='super';}
+function can($p){$r=role();if($r==='super')return true;if($r==='admin')return !in_array($p,['modules','super_users'],true);return in_array($p,['dashboard','leads','appointments','account'],true);}
+// Modules: CRM is always on; Prospecting can be switched off by a super admin
+function modules(){return ['crm'=>['CRM','Leads, pipeline board, lead capture from forms & ads, custom fields, appointments with Google Calendar, automations, WhatsApp, email and AI calls.','users','green',true],'prospecting'=>['Prospecting','Google Maps scraper, website & Maps audits, AI growth reports as branded PDFs, outreach by email & WhatsApp with tracking.','map','orange',false]];}
+function mod($m){return $m==='crm'||setting('mod_'.$m,'1')==='1';}
+// SQL filter so sales people only see their own + unassigned leads
+function scope($a='l'){return role()==='sales'?' AND ('.$a.'.assigned_to='.(int)user()['id'].' OR '.$a.'.assigned_to IS NULL)':'';}
+function lead_ok($l){return $l&&(role()!=='sales'||($l['is_lead']&&(!$l['assigned_to']||(int)$l['assigned_to']===(int)user()['id'])));}
+function rbadge($r){$a=roles()[$r]??[ucfirst((string)$r),'gray'];return '<span class="bdg bdg-'.$a[1].'">'.e($a[0]).'</span>';}
+// Stat card used across pages
+function kpi($label,$value,$ic,$c,$foot='',$href=''){return '<'.($href?'a href="'.e($href).'"':'div').' class="stat st-'.$c.'"><span class="st-i">'.icon($ic).'</span><span class="st-l">'.e($label).'</span><b class="st-v">'.$value.'</b>'.($foot!==''?'<small class="st-f">'.$foot.'</small>':'').'</'.($href?'a':'div').'>';}
+function denied($msg='You do not have access to that page.'){flash($msg,'err');redirect(url('dashboard'));}
 function money($n,$dec=0){return setting('currency_symbol','₹').number_format((float)$n,$dec);}
 function ago($ts){
   if(!$ts)return '—';

@@ -163,7 +163,7 @@ final class Auditor{
   static function pagespeed($u){
     $q=['url'=>$u,'strategy'=>'mobile','category'=>'performance'];
     if($k=setting('google_api_key'))$q['key']=$k;
-    $r=http_json('https://www.googleapis.com/pagespeedonline/v5/runPagespeed?'.http_build_query($q),['timeout'=>70]);
+    $r=http_json('https://www.googleapis.com/pagespeedonline/v5/runPagespeed?'.http_build_query($q),['timeout'=>70]);Usage::log('pagespeed','mobile',1,0,0,null,$r['code']!==200);
     $L=$r['data']['lighthouseResult']??null;if(!$L)return null;
     $a=$L['audits']??[];
     return ['score'=>(int)round(($L['categories']['performance']['score']??0)*100),'lcp'=>round(($a['largest-contentful-paint']['numericValue']??0)/1000,1),'cls'=>round($a['cumulative-layout-shift']['numericValue']??0,2),'tbt'=>(int)($a['total-blocking-time']['numericValue']??0)];}

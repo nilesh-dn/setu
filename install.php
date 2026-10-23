@@ -16,7 +16,7 @@ if(($_SERVER['REQUEST_METHOD']??'')==='POST'){
     date_default_timezone_set('Asia/Kolkata');
     DB::q("SET time_zone=?",[date('P')]);
     Migrator::run();
-    if(!DB::val('SELECT COUNT(*) FROM users WHERE email=?',[trim($P['aemail'])]))DB::insert('users',['name'=>trim($P['aname']),'email'=>trim($P['aemail']),'password'=>password_hash($P['apass'],PASSWORD_DEFAULT)]);
+    if(!DB::val('SELECT COUNT(*) FROM users WHERE email=?',[trim($P['aemail'])]))DB::insert('users',['name'=>trim($P['aname']),'email'=>trim($P['aemail']),'password'=>password_hash($P['apass'],PASSWORD_DEFAULT),'role'=>'super']);
     foreach(['reports','uploads','fonts','cache','logs','tmp','backups'] as $d)@mkdir(STORAGE.'/'.$d,0755,true);
     @mkdir(ROOT.'/assets/uploads',0755,true);
     if(file_put_contents(ROOT.'/config.php',"<?php\n// Setu configuration – keep this file private.\nreturn ".var_export($cfg,true).";\n")===false)throw new Exception('Could not write config.php – make the folder writable.');

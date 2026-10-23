@@ -35,6 +35,7 @@ final class WhatsApp{
       if($r['code']!==200)throw new Exception('WhatsApp: '.($r['data']['error']['message']??$r['body']));
       $first=$r['data']['messages'][0]['id']??'';}
     foreach($files as $f)http_json($u,['headers'=>$h,'json'=>['messaging_product'=>'whatsapp','to'=>$to,'type'=>'document','document'=>$f['doc']]]);
+    Usage::log('whatsapp',setting('wa_template')?'template':'message',1+count($files));
     return $first;}
   private static function upload($path,$tk,$phoneId){
     $ch=curl_init('https://graph.facebook.com/'.setting('wa_api_version','v21.0').'/'.$phoneId.'/media');
@@ -57,4 +58,5 @@ final class WhatsApp{
       $r=http($u,['method'=>setting('wa_api_method','POST'),'body'=>$body,'headers'=>$hdr,'timeout'=>40]);
       if($r['code']<200||$r['code']>=300)throw new Exception('WhatsApp API HTTP '.$r['code'].': '.substr($r['body'],0,200));
       $ids[]=substr($r['body'],0,60);}
+    Usage::log('whatsapp_api','message',count($ids));
     return 'api:'.md5(implode('|',$ids));}}
