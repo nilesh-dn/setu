@@ -1,7 +1,7 @@
 <?php
 final class Updater{
   const KEEP=['config.php','storage','.htaccess.local','.git','.user.ini','php.ini','error_log'];
-  private static function h(){$h=['Accept: application/vnd.github+json','User-Agent: Anvesha-Updater'];if($t=setting('github_token'))$h[]='Authorization: Bearer '.$t;return $h;}
+  private static function h(){$h=['Accept: application/vnd.github+json','User-Agent: Setu-Updater'];if($t=setting('github_token'))$h[]='Authorization: Bearer '.$t;return $h;}
   private static function repo(){return trim(setting('update_repo','nilesh-dn/anvesha'),'/ ');}
   private static function branch(){return setting('update_branch','main');}
   static function check($force=false){

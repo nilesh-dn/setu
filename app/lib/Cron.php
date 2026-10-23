@@ -10,7 +10,7 @@ final class Cron{
     if(!function_exists('shell_exec'))return false;
     $d=array_map('trim',explode(',',(string)ini_get('disable_functions')));
     return !in_array('shell_exec',$d,true);}
-  // Try to add Anvesha to the server crontab (works on hosts that allow it, e.g. many Hostinger/cPanel plans)
+  // Try to add Setu to the server crontab (works on hosts that allow it, e.g. many Hostinger/cPanel plans)
   static function install(){
     if(!self::canShell())return false;
     $cur=(string)@shell_exec('crontab -l 2>/dev/null');
@@ -38,7 +38,7 @@ final class Cron{
     catch(Throwable $e){logmsg('Cron kick: '.$e->getMessage());}}
   static function async($url){
     $ch=curl_init($url);
-    curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT_MS=>1500,CURLOPT_CONNECTTIMEOUT_MS=>1500,CURLOPT_NOSIGNAL=>1,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_USERAGENT=>'Anvesha-Scheduler']);
+    curl_setopt_array($ch,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT_MS=>1500,CURLOPT_CONNECTTIMEOUT_MS=>1500,CURLOPT_NOSIGNAL=>1,CURLOPT_FOLLOWLOCATION=>false,CURLOPT_USERAGENT=>'Setu-Scheduler']);
     curl_exec($ch);curl_close($ch);}
   // Close the HTTP connection early and keep running in the background
   static function detach(){
