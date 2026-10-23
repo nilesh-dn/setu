@@ -38,7 +38,7 @@ if(is_post()){
     if(!$l)$l=['id'=>0,'name'=>'Sample Business','category'=>'Dental clinic','city'=>'Pune','address'=>'Baner, Pune','website'=>'https://example.com','rating'=>4.6,'reviews'=>120,'phone'=>'','email'=>'','keyword'=>'dentist','audit'=>'','position'=>3,'web_score'=>62,'map_score'=>71,'contact_name'=>''];
     $a2=jd($l['audit']);$d=$r?jd($r['html']):[];if(empty($d['summary']))$d=Report::sample();
     $hasWeb=!empty($l['website'])&&empty($a2['website']['meta']['down']);
-    $pdf=Report::pdf(Report::render($l,$a2,$d,$hasWeb,$l['id']?Report::competitors($l):[],(int)($_POST['prompt_id']??0)));
+    $pdf=Report::build($l,$a2,$d,$hasWeb,$l['id']?Report::competitors($l):[],(int)($_POST['prompt_id']??0));
     header('Content-Type: application/pdf');header('Content-Disposition: inline; filename="design-preview.pdf"');echo $pdf;exit;}
   }catch(Throwable $e){flash(e($e->getMessage()),'err');}
   back(url('templates',['t'=>$t]));}

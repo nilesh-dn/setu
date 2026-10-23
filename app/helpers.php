@@ -105,15 +105,18 @@ function settings_map(){
   $s=fn($t)=>url('settings',['tab'=>$t]);
   $m=['general'=>['General','Company, brand & AI','grid','indigo',[['company','Company','grid',$s('company')],['branding','Brand & PDF design','image',$s('branding')],['ai','AI connection','spark',url('ai')]]],
   'channels'=>['Messaging','Email, WhatsApp, calls','msg','green',[['email','Email','mail',$s('email')],['whatsapp','WhatsApp','wa',$s('whatsapp')],['voice','AI voice calls','mic',$s('voice')]]],
-  'prospecting'=>['Prospecting','Maps, audits, outreach','map','orange',[['data','Map scraper & audits','map',$s('data')],['pricing','Pricing & proposal','tag',$s('pricing')],['outreach','Outreach sending','send',$s('outreach')],['templates','Templates & report design','layers',url('templates')]]],
+  'prospecting'=>['Prospecting','Maps, audits, outreach','map','orange',[['data','Map scraper & audits','map',$s('data')],['pricing','Pricing & proposal','tag',$s('pricing')],['pdf','Report PDF engine','file',$s('pdf')],['outreach','Outreach sending','send',$s('outreach')],['templates','Templates & report design','layers',url('templates')]]],
   'crm'=>['CRM','Capture, fields, calendar','users','teal',[['capture','Lead capture','plug',$s('capture')],['fields','Custom fields','list',$s('fields')],['appointments','Appointments & calendar','cal',$s('appointments')]]],
-  'system'=>['System','Team, usage, updates','sliders','violet',[['team','Team & roles','shield',url('team')],['usage','API usage & costs','activity',url('usage')],['modules','Modules','layers',$s('modules')],['scheduler','Background scheduler','zap',$s('scheduler')],['updates','Updates','refresh',url('updates')]]]];
-  if(!is_super())$m['system'][4]=array_values(array_filter($m['system'][4],fn($i)=>$i[0]!=='modules'));
+  'system'=>['System','Team, usage, scheduler','sliders','violet',[['team','Team & roles','shield',url('team')],['usage','API usage & costs','activity',url('usage')],['scheduler','Background scheduler','zap',$s('scheduler')]]],
+  'modules'=>['Modules','Switch features on/off','layers','pink',[['modules','Modules','layers',$s('modules')]]],
+  'updates'=>['Updates','Version & go-live guide','refresh','sky',[['updates','Updates','refresh',url('updates')]]]];
+  if(!is_super())unset($m['modules']);
   return $m;}
 // Opens the settings shell (top tabs + left menu). Close with settings_end().
 function settings_start($key){
   $M=settings_map();$grp='general';foreach($M as $g=>$x)foreach($x[4] as $i)if($i[0]===$key)$grp=$g;
   $o='<div class="mtabs">';foreach($M as $g=>[$lb,$ds,$ic,$c,$items]){$off=$g==='prospecting'&&!mod('prospecting');$o.='<a href="'.e($items[0][3]).'" class="c-'.$c.($grp===$g?' on':'').($off?' off':'').'"><span class="hi">'.icon($ic).'</span><span>'.e($lb).'<small>'.($off?'Module off':e($ds)).'</small></span></a>';}
+  if(count($M[$grp][4])===1)return $o.'</div><div><div class="col">';
   $o.='</div><div class="sl"><nav class="snav c-'.$M[$grp][3].'"><div class="ng2">'.e($M[$grp][0]).'</div>';
   foreach($M[$grp][4] as [$k,$lb,$ic,$u])$o.='<a href="'.e($u).'" class="'.($k===$key?'on':'').'" title="'.e($lb).'">'.icon($ic).'<span>'.e($lb).'</span></a>';
   return $o.'</nav><div class="col">';}

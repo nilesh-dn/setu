@@ -36,7 +36,7 @@ final class AI{
     $h=['x-api-key: '.$key,'anthropic-version: 2026-10-21'];
     if(preg_match('/^claude-(opus|sonnet|haiku|fable)-5/',$model))$body['output_config']=['effort'=>'medium'];
     // Optional live web research (industry benchmarks, search demand) with Anthropic's server-side web search
-    if(!empty($o['research']))$body['tools']=[['type'=>preg_match('/^claude-(opus|sonnet|fable)-|^claude-sonnet-4-6|^claude-opus-4-[678]/',$model)?'web_search_20260209':'web_search_20250305','name'=>'web_search','max_uses'=>4]];
+    if(!empty($o['research']))$body['tools']=[['type'=>preg_match('/^claude-(opus|sonnet|fable)-|^claude-sonnet-4-6|^claude-opus-4-[678]/',$model)?'web_search_20260209':'web_search_20250305','name'=>'web_search','max_uses'=>(int)($o['searches']??4)]];
     // Server-side refusal fallback where supported
     $fb=preg_match('/^claude-(opus-5|opus-5-5|sonnet-5-5|fable-5-1)$/',$model);
     $t='';$tin=0;$tout=0;$ws=0;

@@ -28,6 +28,13 @@ Built for **shared hosting** (cPanel / Hostinger / any PHP host): plain PHP 8 + 
 - **Email** – PHP mail by default (works on shared hosting); SMTP optional for better delivery.
 - AI Connection (Claude, ChatGPT, OpenRouter, Gemini, Groq, DeepSeek, custom), automatic background scheduler (no cron needed), one-click GitHub updates, configurable currency (default INR).
 
+## Report PDFs – best quality
+Settings → Prospecting → **Report PDF engine**. The built-in engine works on any host. For the best, magazine-style design choose a Chrome engine:
+- **Browserless** (browserless.io, free plan) – paste the API token.
+- **PDFShift** (pdfshift.io, free monthly credits) – paste the API key.
+- **Gotenberg** – free, open-source; run its Docker image on any VPS and paste the URL.
+If the engine fails, Setu falls back to the built-in engine automatically. Before writing, the AI runs a research step (live web search with Claude) and the report lists its sources.
+
 ## Lead capture – which method?
 Use **one** method per form:
 - **Elementor / WordPress form plugins (recommended):** Form widget → *Actions After Submit* → **Webhook** → paste the source's Endpoint URL. Simple and "Advanced data" payloads both work.

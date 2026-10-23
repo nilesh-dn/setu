@@ -52,7 +52,8 @@ final class CRM{
     $dup=null;
     if($email||$ph){
       $tail=$ph?substr(preg_replace('/\D/','',$ph),-10):'';
-      $dup=DB::row("SELECT id,custom,message FROM leads WHERE is_lead=1 AND created_at>NOW()-INTERVAL 30 DAY AND ((?<>'' AND LOWER(email)=?) OR (?<>'' AND RIGHT(REPLACE(REPLACE(REPLACE(phone,' ',''),'-',''),'+',''),10)=?)) ORDER BY id DESC LIMIT 1",[$email,$email,$tail,$tail]);}
+      $w=[];$args=[];if($email){$w[]='LOWER(email)=?';$args[]=$email;}if($tail!==''){$w[]="RIGHT(REPLACE(REPLACE(REPLACE(phone,' ',''),'-',''),'+',''),10)=?";$args[]=$tail;}
+      $dup=$w?DB::row('SELECT id,custom,message FROM leads WHERE is_lead=1 AND created_at>NOW()-INTERVAL 30 DAY AND ('.implode(' OR ',$w).') ORDER BY id DESC LIMIT 1',$args):null;}
     if($extra)$custom['_extra']=$extra;
     if($dup){
       $u=array_filter($d,fn($v)=>$v!==''&&$v!==null);unset($u['name']);
