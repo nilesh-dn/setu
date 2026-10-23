@@ -10,8 +10,14 @@ $k=preg_replace('/[^a-f0-9]/','',$_GET['k']??'');
 $src=$k?DB::row('SELECT * FROM sources WHERE token=? AND active=1',[$k]):null;
 if(!$src){http_response_code(404);exit('Unknown or disabled source');}
 try{$ids=Capture::handle($src);}
-catch(Throwable $e){logmsg('Capture '.$src['id'].': '.$e->getMessage());http_response_code(500);exit('Error');}
-$ajax=stripos($_SERVER['HTTP_ACCEPT']??'','json')!==false||stripos($_SERVER['CONTENT_TYPE']??'','json')!==false||!empty($_SERVER['HTTP_X_REQUESTED_WITH'])||$src['type']!=='website';
+catch(Throwable $e){
+  // Never fail the visitor's form: answer 200, record the real reason on the source (shown in Settings → Lead capture)
+  $m=$e->getMessage().' ('.basename($e->getFile()).':'.$e->getLine().')';logmsg('Capture '.$src['id'].': '.$m);
+  try{$c=jd(DB::val('SELECT config FROM sources WHERE id=?',[$src['id']]));$c['last_error']=[date('Y-m-d H:i:s'),mb_substr($m,0,400)];DB::update('sources',['config'=>je($c)],'id=?',[$src['id']]);}catch(Throwable $x){}
+  json_out(['ok'=>false,'error'=>$m]);}
+// Server-to-server calls (Elementor/WordPress, Zapier, Meta, Google) get JSON; a browser form post gets the thank-you page
+$ua=$_SERVER['HTTP_USER_AGENT']??'';
+$ajax=stripos($_SERVER['HTTP_ACCEPT']??'','json')!==false||stripos($_SERVER['CONTENT_TYPE']??'','json')!==false||!empty($_SERVER['HTTP_X_REQUESTED_WITH'])||$src['type']!=='website'||stripos($ua,'Mozilla')===false;
 if($ajax){json_out(['ok'=>true,'leads'=>count($ids)]);}
 $cfg=jd($src['config']);
 $to=$_POST['redirect']??''?:($cfg['thanks_url']??'');

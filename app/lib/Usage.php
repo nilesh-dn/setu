@@ -52,4 +52,36 @@ final class Usage{
     return $out;}
   static function daily($days=30){
     $o=[];foreach(DB::all('SELECT day,SUM(calls) calls,SUM(cost) cost FROM api_usage WHERE day>=CURDATE()-INTERVAL ? DAY GROUP BY day ORDER BY day',[$days-1]) as $r)$o[$r['day']]=$r;
-    return $o;}}
+    return $o;}
+  // Is this API set up / in use? [label, colour]
+  static function status($k){
+    $has=fn($x)=>setting($x)!=='';$ai=setting('ai_provider','anthropic');
+    switch($k){
+      case 'google_places':return $has('google_api_key')?(setting('maps_source','places')==='places'?['Active','green']:['Key added','teal']):['Not added','gray'];
+      case 'serpapi':return $has('serpapi_key')?(setting('maps_source')==='serpapi'?['Active','green']:['Key added','teal']):['Not added','gray'];
+      case 'pagespeed':return $has('google_api_key')&&setting('pagespeed')==='1'?['Active','green']:['Off','gray'];
+      case 'web_search':return $ai==='anthropic'&&$has('ai_key_anthropic')&&setting('ai_web_research','1')==='1'?['Active','green']:['Off','gray'];
+      case 'whatsapp':return setting('wa_provider')==='cloud'?['Active','green']:['Not added','gray'];
+      case 'whatsapp_api':return setting('wa_provider')==='generic'?['Active','green']:['Not added','gray'];
+      case 'email':return Mailer::ready()?['Active · '.(Mailer::smtp()?'SMTP':'PHP mail'),'green']:['Not set up','amber'];
+      case 'gcal':return GCal::ready()?['Connected','green']:['Not connected','gray'];}
+    if(strpos($k,'voice_')===0)return setting('voice_provider')===substr($k,6)?(Voice::ready()?['Active','green']:['Incomplete','amber']):['Not added','gray'];
+    if(isset(AI::providers()[$k]))return $has('ai_key_'.$k)?($ai===$k?['Active','green']:['Key added','teal']):['Not added','gray'];
+    return ['—','gray'];}
+  // USD → local currency, refreshed once a day from a free rates API (falls back to the last known or manual rate)
+  static function fx(){
+    $cur=strtoupper(setting('currency','INR'));if($cur==='USD')return [1.0,'—',''];
+    if(setting('fx_mode','auto')==='manual')return [(float)setting('usd_rate','84'),'manual',''];
+    $c=jd(setting('fx_cache'));
+    if(($c['cur']??'')!==$cur||($c['day']??'')!==date('Y-m-d')){
+      $r=http_json('https://open.er-api.com/v6/latest/USD',['timeout'=>8]);
+      $v=$r['data']['rates'][$cur]??null;
+      if($v){$c=['cur'=>$cur,'day'=>date('Y-m-d'),'rate'=>(float)$v,'at'=>date('Y-m-d H:i')];Settings::set('fx_cache',je($c));}
+      elseif(($c['cur']??'')!==$cur)return [(float)setting('usd_rate','84'),'fallback',''];}
+    return [(float)$c['rate'],'auto',$c['at']??''];}
+  // Estimated bill this month after free tiers: [cost, projected cost]
+  static function bill($k,$m,$price,$free){
+    $c=self::catalog()[$k]??null;if(!$c||$c[2]==='tokens')return [(float)($m['cost']??0),(float)($m['proj_cost']??0)];
+    if($c[5]==='day'){$o=0;foreach(DB::all("SELECT SUM(calls) n FROM api_usage WHERE service=? AND day>=DATE_FORMAT(CURDATE(),'%Y-%m-01') GROUP BY day",[$k]) as $r)$o+=max(0,$r['n']-$free)*$price;$d=max(1,(int)date('j'));return [$o,$o/$d*(int)date('t')];}
+    $u=(float)($m['units']??0);$pj=(float)($m['proj']??0);
+    return [max(0,$u-$free)*$price,max(0,$pj-$free)*$price];}}

@@ -18,7 +18,7 @@ $leads=DB::all("SELECT l.* FROM leads l WHERE $where ORDER BY COALESCE(l.last_ac
 if(isset($_GET['partial'])){$selectable=true;require APP.'/views/leads_table.php';exit;}
 $camps=DB::all('SELECT id,keyword,location FROM campaigns ORDER BY id DESC LIMIT 200');
 $k=DB::row("SELECT COUNT(*) t,SUM(stage IN ('queued','auditing','reporting','contacting')) wk,SUM(stage='report_ready') rr,SUM(replied_at IS NOT NULL) rp,SUM(is_lead) il FROM leads WHERE source='maps'");
-$qs=fn($x)=>url('prospects',array_filter(['q'=>$q,'stage'=>$st,'cid'=>$cid?:'','web'=>$web,'il'=>$il]+$x,'strlen'));
+$qs=fn($x)=>url('prospects',array_filter(array_merge(['q'=>$q,'stage'=>$st,'cid'=>$cid?:'','web'=>$web,'il'=>$il],$x),'strlen'));
 ?>
 <div class="stats"><?=kpi('Scraped businesses',number_format((int)$k['t']),'db','sky','from '.count($camps).' searches')?><?=kpi('Processing now',(int)$k['wk'],'zap','orange','audits & reports',url('prospects',['stage'=>'working']))?><?=kpi('Reports ready',(int)$k['rr'],'file','violet','waiting to be sent',url('prospects',['stage'=>'report_ready']))?><?=kpi('Moved to Leads',(int)$k['il'],'users','green',(int)$k['rp'].' replied',url('prospects',['il'=>'1']))?></div>
 <?php $nf=count(array_filter([$q,$st,$cid,$web,$il],'strlen'));?>

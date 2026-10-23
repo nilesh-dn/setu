@@ -100,3 +100,21 @@ function sbadge($s){$a=crm_statuses()[$s]??[ucfirst((string)$s),'gray'];return '
 function lead_sources(){return ['maps'=>['Map scraper','orange','map'],'manual'=>['Manual','gray','edit'],'website'=>['Website form','blue','globe'],'facebook'=>['Meta / Facebook ads','purple','target'],'google'=>['Google Ads','green','zap'],'webhook'=>['Webhook / API','teal','plug'],'import'=>['CSV import','gray','upload'],'booking'=>['Booking page','orange','cal']];}
 function srcbadge($s){$a=lead_sources()[$s]??[ucfirst((string)$s),'gray','link'];return '<span class="src-b src-'.$a[1].'">'.icon($a[2]).e($a[0]).'</span>';}
 function pbar($pct,$msg=''){$pct=(int)$pct;return '<div class="pb" title="'.e($msg).'"><i style="width:'.$pct.'%"></i></div><small class="pbm">'.$pct.'% · '.e(mb_strimwidth($msg,0,46,'…')).'</small>';}
+// Settings hub: top module tabs → left menu items [key,label,icon,url]. Pages like AI, Templates, Team, Usage, Updates live here too.
+function settings_map(){
+  $s=fn($t)=>url('settings',['tab'=>$t]);
+  $m=['general'=>['General','Company, brand & AI','grid','indigo',[['company','Company','grid',$s('company')],['branding','Brand & PDF design','image',$s('branding')],['ai','AI connection','spark',url('ai')]]],
+  'channels'=>['Messaging','Email, WhatsApp, calls','msg','green',[['email','Email','mail',$s('email')],['whatsapp','WhatsApp','wa',$s('whatsapp')],['voice','AI voice calls','mic',$s('voice')]]],
+  'prospecting'=>['Prospecting','Maps, audits, outreach','map','orange',[['data','Map scraper & audits','map',$s('data')],['pricing','Pricing & proposal','tag',$s('pricing')],['outreach','Outreach sending','send',$s('outreach')],['templates','Templates & report design','layers',url('templates')]]],
+  'crm'=>['CRM','Capture, fields, calendar','users','teal',[['capture','Lead capture','plug',$s('capture')],['fields','Custom fields','list',$s('fields')],['appointments','Appointments & calendar','cal',$s('appointments')]]],
+  'system'=>['System','Team, usage, updates','sliders','violet',[['team','Team & roles','shield',url('team')],['usage','API usage & costs','activity',url('usage')],['modules','Modules','layers',$s('modules')],['scheduler','Background scheduler','zap',$s('scheduler')],['updates','Updates','refresh',url('updates')]]]];
+  if(!is_super())$m['system'][4]=array_values(array_filter($m['system'][4],fn($i)=>$i[0]!=='modules'));
+  return $m;}
+// Opens the settings shell (top tabs + left menu). Close with settings_end().
+function settings_start($key){
+  $M=settings_map();$grp='general';foreach($M as $g=>$x)foreach($x[4] as $i)if($i[0]===$key)$grp=$g;
+  $o='<div class="mtabs">';foreach($M as $g=>[$lb,$ds,$ic,$c,$items]){$off=$g==='prospecting'&&!mod('prospecting');$o.='<a href="'.e($items[0][3]).'" class="c-'.$c.($grp===$g?' on':'').($off?' off':'').'"><span class="hi">'.icon($ic).'</span><span>'.e($lb).'<small>'.($off?'Module off':e($ds)).'</small></span></a>';}
+  $o.='</div><div class="sl"><nav class="snav c-'.$M[$grp][3].'"><div class="ng2">'.e($M[$grp][0]).'</div>';
+  foreach($M[$grp][4] as [$k,$lb,$ic,$u])$o.='<a href="'.e($u).'" class="'.($k===$key?'on':'').'" title="'.e($lb).'">'.icon($ic).'<span>'.e($lb).'</span></a>';
+  return $o.'</nav><div class="col">';}
+function settings_end(){return '</div></div>';}
